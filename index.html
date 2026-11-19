@@ -338,6 +338,65 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;bac
 .srow .sb{grid-area:b;height:12px;border-radius:99px;background:var(--line);overflow:hidden}
 .srow .sb i{display:block;height:100%;border-radius:99px}
 @media(min-width:760px){.srow{grid-template-columns:150px minmax(0,1fr) 110px 40px;grid-template-areas:"n b v p"}.srow .sb{align-self:center}}
+
+/* ---------- v4: vivid futuristic theme (glass, aurora, glow) ---------- */
+:root{--accent:#5a6bff;--accent-soft:#e8ecff;--bg:#eef1ff;--cyan:#12d6c4;--pink:#ff5ec4;--violet:#8a5cff;--blue:#3d7bff;
+  --grad:linear-gradient(135deg,#3d7bff 0%,#8a5cff 55%,#ff5ec4 100%);--glass:rgba(255,255,255,.72);--glassline:rgba(255,255,255,.85);--glow:rgba(106,92,255,.35)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#070b1d;--surface:#111838;--ink:#f1f3ff;--muted:#9aa3cf;--line:#232c57;--accent:#8aa0ff;--accent-soft:#1c2760;--glass:rgba(22,30,70,.62);--glassline:rgba(140,160,255,.18);--glow:rgba(110,120,255,.45)}}
+:root[data-theme="dark"]{--bg:#070b1d;--surface:#111838;--ink:#f1f3ff;--muted:#9aa3cf;--line:#232c57;--accent:#8aa0ff;--accent-soft:#1c2760;--glass:rgba(22,30,70,.62);--glassline:rgba(140,160,255,.18);--glow:rgba(110,120,255,.45)}
+body::before{background:radial-gradient(520px 420px at 105% -6%,rgba(138,92,255,.32),transparent 70%),radial-gradient(460px 400px at -8% 30%,rgba(18,214,196,.24),transparent 70%),radial-gradient(520px 420px at 95% 98%,rgba(255,94,196,.26),transparent 70%);animation:aur 16s ease-in-out infinite alternate}
+@keyframes aur{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-14px,10px,0) scale(1.06)}}
+header h1{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:26px;letter-spacing:-.2px}
+.card,.kpi,.seg,.rng button,.cnav button{background:var(--glass);border:1px solid var(--glassline);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 10px 30px -12px var(--glow)}
+.rng button[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 20px -6px var(--glow)}
+.seg button[aria-current="true"]{background:var(--grad);box-shadow:0 8px 22px -6px var(--glow)}
+.hero{background:linear-gradient(120deg,#12d6c4,#3d7bff 45%,#8a5cff 80%,#ff5ec4);background-size:180% 180%;animation:mesh 12s ease-in-out infinite alternate;box-shadow:0 22px 44px -14px var(--glow);border:1px solid rgba(255,255,255,.35)}
+.hero.bad{background:linear-gradient(120deg,#ff6a5b,#ff9f43 55%,#ff5ec4);background-size:180% 180%;box-shadow:0 22px 44px -14px rgba(255,106,91,.5)}
+@keyframes mesh{from{background-position:0% 40%}to{background-position:100% 60%}}
+.hero::after{left:auto;right:-30px;bottom:-90px;width:240px;height:240px;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 68%)}
+.hero-big{text-shadow:0 4px 24px rgba(20,20,120,.35);letter-spacing:-.5px}
+.bar{background:rgba(255,255,255,.3)}
+.bar i{background:linear-gradient(90deg,#fff,#d8f9ff);box-shadow:0 0 12px rgba(255,255,255,.8);position:relative;overflow:hidden}
+.bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.9) 50%,transparent 70%);transform:translateX(-100%);animation:shim 2.6s ease-in-out infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+.rw{border-radius:20px;transition:transform .18s ease,box-shadow .18s ease}
+.rw:hover{transform:translateY(-2px);box-shadow:0 14px 28px -12px var(--glow)}
+.rfg{border:1px solid var(--glassline);border-radius:20px}
+.av{box-shadow:0 8px 16px -6px rgba(60,80,200,.5)}
+.chip.full.on{background:linear-gradient(160deg,#6fa0ff,#6a5cff);box-shadow:0 8px 18px -4px rgba(106,92,255,.6)}
+.chip.part.on{background:linear-gradient(160deg,#ff8fd0,#a56bff);box-shadow:0 8px 18px -4px rgba(255,94,196,.55)}
+.chip{transition:transform .12s ease,box-shadow .2s ease}
+.btn{background:var(--grad);box-shadow:0 10px 22px -8px var(--glow);transition:transform .15s ease,box-shadow .2s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 14px 26px -8px var(--glow)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:var(--glass);color:var(--ink);box-shadow:none;border:1px solid var(--glassline)}
+.fab{background:var(--grad);box-shadow:0 14px 32px -6px var(--glow);overflow:visible}
+.fab::before{content:"";position:absolute;inset:-5px;border-radius:99px;background:var(--grad);opacity:.35;filter:blur(12px);z-index:-1;animation:pulse 2.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.25;transform:scale(1)}50%{opacity:.55;transform:scale(1.06)}}
+.sheet{background:var(--surface);box-shadow:0 -20px 60px -10px var(--glow)}
+.overlay{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.fgrp{background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.grid tr.cur td,.grid tr.cur th{box-shadow:inset 0 0 0 9999px rgba(18,214,196,.06)}
+.badge,.chipacct{box-shadow:0 6px 16px -8px var(--glow)}
+@media(max-width:899px){
+  .side{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));border:1px solid var(--glassline);border-radius:26px;padding:6px;background:var(--glass);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);box-shadow:0 16px 40px -10px var(--glow)}
+  nav button{border-radius:20px;transition:background .2s,color .2s}
+  nav button[aria-current="page"]{background:var(--grad);color:#fff;box-shadow:0 8px 20px -6px var(--glow)}
+  nav button[aria-current="page"] svg{animation:pop .4s ease}
+  .content{padding-bottom:112px}
+  .fab{bottom:96px}
+}
+@media(min-width:900px){
+  .side{background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  nav button[aria-current="page"]{background:var(--grad);color:#fff;box-shadow:0 8px 20px -6px var(--glow)}
+}
+@keyframes pop{0%{transform:scale(.6)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+@media(prefers-reduced-motion:no-preference){
+  main>*{animation:rise .45s cubic-bezier(.2,.8,.2,1) both}
+  main>*:nth-child(2){animation-delay:.04s}main>*:nth-child(3){animation-delay:.08s}main>*:nth-child(4){animation-delay:.12s}main>*:nth-child(5){animation-delay:.16s}
+  @keyframes rise{from{transform:translateY(12px);opacity:.4}to{transform:none;opacity:1}}
+}
+@media(prefers-reduced-motion:reduce){body::before,.hero,.bar i::after,.fab::before{animation:none!important}}
 </style>
 </head>
 <body>
