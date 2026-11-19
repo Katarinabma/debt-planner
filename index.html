@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ตารางจ่ายหนี้</title>
+<title>MyFinancePlanner</title>
 <meta name="theme-color" content="#00c2a8">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -136,14 +136,17 @@ table.plain{width:100%;border-collapse:collapse;font-size:14px}
 .tstats .card{padding:12px 14px}
 .tstats small{display:block;color:var(--muted);font-size:12px}
 .tstats b{font-family:var(--display);font-size:19px}
-.tbl{overflow:auto;border-radius:20px;background:var(--surface);box-shadow:var(--shadow);max-width:100%}
+.tbl{overflow:auto;max-height:calc(100vh - 300px);min-height:300px;border-radius:20px;background:var(--surface);box-shadow:var(--shadow);max-width:100%}
 table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:980px;width:100%}
 .grid th,.grid td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
 .grid thead th{background:var(--bg);color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1;white-space:normal;line-height:1.2}
 .grid th:first-child{position:sticky;left:0;text-align:left;background:var(--surface);z-index:2;border-right:1px solid var(--line);font-weight:600}
 .grid thead th:first-child{background:var(--bg);z-index:3}
 .grid tr.cur th:first-child{background:var(--accent);color:#fff}
-.grid tr.past td,.grid tr.past th{color:var(--muted)}
+.grid tr.past td,.grid tr.past th{color:#a9b3c1;background:rgba(120,135,155,.08);font-weight:400}
+.grid tr.past td.cellbtn{cursor:default}
+.grid tr.past td.paid{opacity:.7}
+.grid tr.past td.tint,.grid tr.past td.ovr,.grid tr.past td.rem.neg{background:rgba(120,135,155,.08);color:#a9b3c1;font-weight:400}
 .grid td.paid{text-decoration:line-through;opacity:.5}
 .grid td.tint{background:var(--warn-bg);color:var(--warn);font-weight:600;text-decoration:none}
 .grid td.rem{font-weight:700}
@@ -203,7 +206,7 @@ table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:
 .acct.s-error .dotc{background:var(--bad)}
 .gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
 .gate .box{width:100%;max-width:420px;background:var(--surface);border-radius:28px;box-shadow:var(--shadow);padding:28px 22px;display:flex;flex-direction:column;gap:14px;text-align:center}
-.gate .logo{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;background:linear-gradient(135deg,#00c2a8,#2f6bff);color:#fff;font-size:32px;margin:0 auto}
+.gate .logo{width:76px;height:76px;margin:0 auto;filter:drop-shadow(0 8px 16px rgba(47,107,255,.25))}
 .gate h2{margin:0;font-family:var(--display);font-size:22px;text-wrap:balance}
 .gate p{margin:0;color:var(--muted);font-size:14px}
 .gate ol{text-align:left;margin:0;padding-left:20px;color:var(--ink);font-size:14px;display:flex;flex-direction:column;gap:4px}
@@ -230,7 +233,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
   .shell{display:grid;grid-template-columns:230px minmax(0,1fr)}
   .side{position:sticky;top:0;left:auto;right:auto;bottom:auto;height:100vh;border-top:0;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:18px}
   .brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:700;font-size:17px}
-  .logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#00c2a8,#2f6bff);color:#fff;font-size:20px}
+  .logo{width:40px;height:40px;flex:none;display:block}
   nav{flex-direction:column;gap:4px}
   nav button{flex:none;flex-direction:row;gap:12px;font-size:15px;padding:12px 14px;justify-content:flex-start}
   .side-foot{display:block;margin-top:auto;font-size:12px;color:var(--muted)}
@@ -250,6 +253,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+const LOGO='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true" width="100%" height="100%"><defs><linearGradient id="mfp-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14d8c4"/><stop offset=".55" stop-color="#2a8cf0"/><stop offset="1" stop-color="#3b5bff"/></linearGradient><radialGradient id="mfp-gl" cx=".25" cy=".15" r=".9"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient><linearGradient id="mfp-coin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe9ff"/></linearGradient><linearGradient id="mfp-baht" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#12b6d6"/><stop offset="1" stop-color="#3159f5"/></linearGradient><linearGradient id="mfp-hand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d6ecff"/></linearGradient><filter id="mfp-sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0b2a8a" flood-opacity=".28"/></filter></defs><rect width="512" height="512" rx="116" fill="url(#mfp-bg)"/><rect width="512" height="512" rx="116" fill="url(#mfp-gl)"/><!-- sparkles --><g fill="#fff" opacity=".9"><path d="M394 96l7 18 18 7-18 7-7 18-7-18-18-7 18-7z"/><path d="M120 132l4.5 11 11 4.5-11 4.5-4.5 11-4.5-11-11-4.5 11-4.5z" opacity=".7"/></g><!-- coin --><g filter="url(#mfp-sh)"><circle cx="256" cy="182" r="94" fill="url(#mfp-coin)"/></g><circle cx="256" cy="182" r="76" fill="none" stroke="#2f6bff" stroke-opacity=".22" stroke-width="7"/><g fill="none" stroke="url(#mfp-baht)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -12)"><path d="M232 156h30a22 22 0 0 1 0 44h-30M232 200h34a24 24 0 0 1 0 48h-34M232 156v92"/><path d="M248 134v22M248 248v22" stroke="#1d9be0" stroke-width="13"/></g><!-- hand --><rect x="46" y="334" width="54" height="108" rx="20" fill="#fff" fill-opacity=".32" transform="rotate(-8 59 389)"/><g filter="url(#mfp-sh)"><path d="M82 352c0-16 11-26 26-28l62-9c24-3 44 3 66 12l50 18c22 8 44-4 66-15 15-8 31 4 31 20 0 13-8 22-21 30l-98 50c-18 10-40 14-62 14h-70c-30 0-50-18-50-44z" fill="url(#mfp-hand)"/></g><path d="M188 334c26-16 56-14 84 0" fill="none" stroke="#8cc0f7" stroke-opacity=".55" stroke-width="7" stroke-linecap="round"/><g fill="none" stroke="#7fb7f5" stroke-opacity=".6" stroke-width="7" stroke-linecap="round"><path d="M330 358c14 6 30 8 44 2"/><path d="M300 388c18 8 38 8 56 0"/><path d="M262 416c18 8 40 6 58-4"/></g></svg>';
 const MS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
 const HOL_DEFAULT=['2026-12-07','2026-12-10','2026-12-31','2027-01-01'];
@@ -396,7 +400,7 @@ function viewTable(){
   for(let i=0;i<MONTHS.length;i++){
     const tot=total(i),left=salOf(i)+carryOf(i)-tot;
     rows+='<tr class="'+(i===cu?'cur ':'')+(i<cu?'past':'')+'"><th scope="row">'+lab(i)+'</th><td>'+fmt(salOf(i))+'</td><td>'+(carryOf(i)?fmt(carryOf(i)):'')+'</td>'
-      +COLS.map(c=>{const v=cell(c.id,i),ov=isOver(c.id,i),t=!ov&&entryAmt(c.id,i)!==0,pd=!!s.paid[i+'-'+c.id];return '<td class="cellbtn'+(t?' tint':'')+(ov?' ovr':'')+(pd?' paid':'')+'" data-act="cellsheet" data-id="'+c.id+'" data-mi="'+i+'" tabindex="0" role="button" aria-label="'+esc(c.name)+' '+lab(i)+(pd?' จ่ายแล้ว':'')+'">'+(v||ov?fmt(v):'')+'</td>'}).join('')
+      +COLS.map(c=>{const v=cell(c.id,i),ov=isOver(c.id,i),t=!ov&&entryAmt(c.id,i)!==0,pd=!!s.paid[i+'-'+c.id];return '<td class="cellbtn'+(t?' tint':'')+(ov?' ovr':'')+(pd?' paid':'')+'"'+(i<cu?'':' data-act="cellsheet" data-id="'+c.id+'" data-mi="'+i+'" tabindex="0" role="button"')+' aria-label="'+esc(c.name)+' '+lab(i)+(pd?' จ่ายแล้ว':'')+'">'+(v||ov?fmt(v):'')+'</td>'}).join('')
       +'<td>'+fmt(tot)+'</td><td class="rem '+(left<0?'neg':'')+'">'+(left<0?'-':'')+fmt(Math.abs(left))+'</td><td class="usedfor">'+usedFor(i)+'</td></tr>';
   }
   let negs=0,sum=0;
@@ -407,7 +411,7 @@ function viewTable(){
   return '<div class="tstats"><div class="card"><small>ต้องจ่ายรวม '+lab(cu)+' – '+lab(MONTHS.length-1)+'</small><b class="num">฿'+fmt(sum)+'</b></div>'
     +'<div class="card"><small>รอบที่เงินไม่พอ</small><b class="num '+(negs?'neg':'')+'">'+negs+' รอบ</b></div></div>'
     +'<div class="tbl" tabindex="0" aria-label="ตารางสรุปรายเดือน"><table class="grid"><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
-    +'<div class="legend"><i></i>สีส้ม = ยอดจากรายการที่ลงใหม่ · สีฟ้า = แก้ยอดเอง · ขีดฆ่า = จ่ายแล้ว · แตะช่องเพื่อติ๊กจ่าย แก้ยอด หรือดูรายการข้างใน · เงินเดือนของแถว ใช้สำหรับเดือนในคอลัมน์ขวาสุด</div>'
+    +'<div class="legend"><i></i>สีส้ม = ยอดจากรายการที่ลงใหม่ · สีฟ้า = แก้ยอดเอง · ขีดฆ่า = จ่ายแล้ว · แตะช่องเพื่อติ๊กจ่าย แก้ยอด หรือดูรายการข้างใน · แถวสีเทาคืออดีต แก้ไม่ได้ เลื่อนขึ้นเพื่อดู · เงินเดือนของแถว ใช้สำหรับเดือนในคอลัมน์ขวาสุด</div>'
     +'<div class="sec-h"><h2>รายการที่ลงไว้</h2><span>ลบแล้วยอดทุกเดือนกลับเอง</span></div><div class="card">'+ents+'</div>';
 }
 
@@ -735,12 +739,18 @@ function toast(t){const e=document.createElement('div');e.className='toast';e.te
 const TITLES={month:'รายการที่ต้องจ่าย',table:'ตารางสรุป',cards:'บัตรและหนี้',set:'ตั้งค่า'};
 function render(){
   if(s.tab!=='set')s.resetArm=false;
+  const oldTbl=document.querySelector('.tbl'),keep=oldTbl?{t:oldTbl.scrollTop,l:oldTbl.scrollLeft}:null;
   const body=s.tab==='month'?viewMonth():s.tab==='table'?viewTable():s.tab==='cards'?viewCards():viewSettings();
   const nav=[['month','รายการจ่าย',ic.cal],['table','ตาราง',ic.tbl],['cards','บัตร',ic.card],['set','ตั้งค่า',ic.set]]
     .map(x=>'<button data-act="tab" data-t="'+x[0]+'"'+(s.tab===x[0]?' aria-current="page"':'')+'>'+x[2]+x[1]+'</button>').join('');
-  document.getElementById('app').innerHTML='<div class="shell"><aside class="side"><div class="brand"><span class="logo">฿</span>ตารางจ่ายหนี้</div><nav>'+nav+'</nav><div class="side-foot">ข้อมูลของคุณ</div></aside>'
-    +'<div class="content"><header><div><h1>'+TITLES[s.tab]+'</h1><p>วันนี้ '+WD[TODAY.getDay()]+' '+dm(TODAY)+' 2569</p></div>'+chipHtml()+'</header><main>'+body+'</main></div>'
+  document.getElementById('app').innerHTML='<div class="shell"><aside class="side"><div class="brand"><span class="logo">'+LOGO+'</span>MyFinancePlanner</div><nav>'+nav+'</nav><div class="side-foot">ข้อมูลของคุณ</div></aside>'
+    +'<div class="content"><header><div><h1>'+TITLES[s.tab]+'</h1><p>วันนี้ '+WD[TODAY.getDay()]+' '+dm(TODAY)+' '+(TODAY.getFullYear()+543)+'</p></div>'+chipHtml()+'</header><main>'+body+'</main></div>'
     +'<button class="fab" data-act="add">+ ลงรายการ</button></div>';
+  const tb=document.querySelector('.tbl');
+  if(tb){
+    if(keep){tb.scrollTop=keep.t;tb.scrollLeft=keep.l}
+    else{const r=tb.querySelector('tr.cur'),th=tb.querySelector('thead');if(r&&th)tb.scrollTop=Math.max(0,r.offsetTop-th.offsetHeight)}
+  }
   queueSave();
 }
 
@@ -822,7 +832,7 @@ function openAcct(){
 function showGate(){
   if(document.getElementById('gate'))return;
   const g=document.createElement('div');g.className='gate';g.id='gate';
-  g.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-label="เข้าสู่ระบบ"><div class="logo">฿</div><h2>ตารางจ่ายหนี้</h2>'
+  g.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-label="เข้าสู่ระบบ"><div class="logo">'+LOGO+'</div><h2>MyFinancePlanner</h2>'
    +'<p>เข้าสู่ระบบเพื่อบันทึกข้อมูลส่วนตัวของคุณบนคลาวด์ และเปิดได้ทั้งมือถือ แท็บเล็ต และคอม</p>'
    +'<button class="btn" data-act="gsign">เข้าสู่ระบบด้วย Google</button>'
    +'<div class="field" style="text-align:left"><label for="g-email">หรือรับลิงก์เข้าสู่ระบบทางอีเมล</label><input id="g-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>'
