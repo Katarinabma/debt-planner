@@ -1347,7 +1347,10 @@ function showGate(){
    +'<p>เข้าสู่ระบบเพื่อบันทึกข้อมูลส่วนตัวของคุณบนคลาวด์ และเปิดได้ทั้งมือถือ แท็บเล็ต และคอม</p>'
    +(CFG.GOOGLE?'<button class="btn" data-act="gsign">เข้าสู่ระบบด้วย Google</button>':'')
    +'<div class="field" style="text-align:left"><label for="g-email">'+(CFG.GOOGLE?'หรือรับลิงก์เข้าสู่ระบบทางอีเมล':'อีเมลของคุณ')+'</label><input id="g-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>'
-   +'<button class="btn'+(CFG.GOOGLE?' ghost':'')+'" data-act="mlink">ส่งลิงก์เข้าสู่ระบบทางอีเมล</button>'
+   +'<div class="field" style="text-align:left"><label for="g-pass">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="g-pass" type="password" autocomplete="current-password" placeholder="••••••"></div>'
+   +'<button class="btn" data-act="psign">เข้าสู่ระบบ</button>'
+   +'<button class="btn ghost" data-act="pup">สมัครใช้งานครั้งแรก (ตั้งรหัสผ่านนี้)</button>'
+   +'<button class="btn ghost" data-act="mlink" style="font-size:13px">หรือส่งลิงก์เข้าสู่ระบบทางอีเมลแทน</button>'
    +'<p id="g-msg" style="min-height:1.4em"></p>'
    +'<button class="btn ghost" data-act="demo">ใช้แบบไม่ล็อกอิน (บันทึกในเครื่องนี้)</button></div>';
   document.body.appendChild(g);
@@ -1358,12 +1361,21 @@ async function gsign(){
   const {error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:redirectUrl()}});
   if(error){const m=document.getElementById('g-msg');if(m)m.textContent='เข้าสู่ระบบไม่สำเร็จ: '+error.message}
 }
+const authErr=m=>/rate limit/i.test(m)?'ส่งอีเมลเกินโควตาของ Supabase ให้ใช้รหัสผ่านแทน หรือรอประมาณ 1 ชั่วโมง':/invalid login/i.test(m)?'อีเมลหรือรหัสผ่านไม่ถูกต้อง (ถ้ายังไม่เคยสมัคร กด "สมัครใช้งานครั้งแรก")':/already registered|already been registered/i.test(m)?'อีเมลนี้สมัครแล้ว กด "เข้าสู่ระบบ" แทน':/at least|weak|password/i.test(m)?'รหัสผ่านสั้นเกินไป ใช้อย่างน้อย 6 ตัว':m;
+async function psign(up){
+  const email=(document.getElementById('g-email').value||'').trim(),pw=document.getElementById('g-pass').value||'',m=document.getElementById('g-msg');
+  if(!email||!pw){if(m)m.textContent='ใส่อีเมลและรหัสผ่านก่อนครับ';return}
+  if(m)m.textContent='กำลังดำเนินการ…';
+  const r=up?await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:redirectUrl()}}):await sb.auth.signInWithPassword({email,password:pw});
+  if(r.error){if(m)m.textContent=authErr(r.error.message||'');return}
+  if(up&&!r.data.session){if(m)m.textContent='สมัครแล้ว แต่โปรเจกต์ตั้งให้ต้องยืนยันอีเมลก่อน เปิดอีเมลแล้วกดลิงก์ยืนยัน (หรือปิด Confirm email ใน Supabase)'}
+}
 async function mlink(){
   const el=document.getElementById('g-email'),m=document.getElementById('g-msg');
   const email=el&&el.value.trim();
   if(!email){if(m)m.textContent='ใส่อีเมลก่อนครับ';return}
   const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl()}});
-  if(m)m.textContent=error?'ส่งไม่สำเร็จ: '+error.message:'ส่งลิงก์ไปที่ '+email+' แล้ว เปิดอีเมลแล้วกดลิงก์ได้เลย';
+  if(m)m.textContent=error?'ส่งไม่สำเร็จ: '+authErr(error.message||''):'ส่งลิงก์ไปที่ '+email+' แล้ว เปิดอีเมลแล้วกดลิงก์ได้เลย';
 }
 async function enterCloud(session){
   if(sync.uid===session.user.id)return;
@@ -1461,6 +1473,8 @@ document.addEventListener('click',e=>{
   else if(a==='showgate'){closeSheet(true);showGate()}
   else if(a==='gsign')gsign();
   else if(a==='mlink')mlink();
+  else if(a==='psign')psign(false);
+  else if(a==='pup')psign(true);
   else if(a==='export')exportData();
   else if(a==='import'){const f=document.getElementById('imp-file');if(f)f.click()}
   else if(a==='demo'){try{localStorage.setItem(LS_DEMO,'1')}catch(_){}hideGate()}
