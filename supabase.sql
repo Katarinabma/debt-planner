@@ -5,6 +5,7 @@ create table if not exists public.plans (
   updated_at timestamptz not null default now()
 );
 alter table public.plans enable row level security;
+grant select, insert, update, delete on public.plans to authenticated;
 create policy "own select" on public.plans for select using (auth.uid() = user_id);
 create policy "own insert" on public.plans for insert with check (auth.uid() = user_id);
 create policy "own update" on public.plans for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
