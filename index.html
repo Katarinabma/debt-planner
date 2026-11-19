@@ -1345,9 +1345,9 @@ function showGate(){
   const g=document.createElement('div');g.className='gate';g.id='gate';
   g.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-label="เข้าสู่ระบบ"><div class="logo">'+LOGO+'</div><h2>My Financial Planner</h2>'
    +'<p>เข้าสู่ระบบเพื่อบันทึกข้อมูลส่วนตัวของคุณบนคลาวด์ และเปิดได้ทั้งมือถือ แท็บเล็ต และคอม</p>'
-   +'<button class="btn" data-act="gsign">เข้าสู่ระบบด้วย Google</button>'
-   +'<div class="field" style="text-align:left"><label for="g-email">หรือรับลิงก์เข้าสู่ระบบทางอีเมล</label><input id="g-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>'
-   +'<button class="btn ghost" data-act="mlink">ส่งลิงก์ให้ทางอีเมล</button>'
+   +(CFG.GOOGLE?'<button class="btn" data-act="gsign">เข้าสู่ระบบด้วย Google</button>':'')
+   +'<div class="field" style="text-align:left"><label for="g-email">'+(CFG.GOOGLE?'หรือรับลิงก์เข้าสู่ระบบทางอีเมล':'อีเมลของคุณ')+'</label><input id="g-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>'
+   +'<button class="btn'+(CFG.GOOGLE?' ghost':'')+'" data-act="mlink">ส่งลิงก์เข้าสู่ระบบทางอีเมล</button>'
    +'<p id="g-msg" style="min-height:1.4em"></p>'
    +'<button class="btn ghost" data-act="demo">ใช้แบบไม่ล็อกอิน (บันทึกในเครื่องนี้)</button></div>';
   document.body.appendChild(g);
