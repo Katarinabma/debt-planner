@@ -17,3 +17,4 @@
 
 ## เผยแพร่ด้วย GitHub Pages
 Settings > Pages > Deploy from branch > main / root
+
