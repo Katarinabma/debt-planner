@@ -838,11 +838,10 @@ function openAdd(colId,blank){
   const fc=cardsOf()[0]||COLS[0],col=colId||(fc&&fc.id)||'',from=suggestFrom(col),cc=COLS.find(x=>x.id===col);
   s.form={kind:'add',tx:fmtD(TODAY),name:'',cat:'',catx:'',amt:0,col,from,to:Math.min(MONTHS.length-1,from+2),int:0,iu:cc&&cc.card?'card':'yr',zero:false,zm:0,over:{}};
   const f=s.form;
-  const catOpts='<option value="">— เลือกหมวด (ไม่เลือกก็ได้) —</option>'+CATS.map(x=>'<option value="'+x.id+'">'+x.e+' '+x.n+'</option>').join('')+'<option value="__x">✏️ กรอกเอง…</option>';
+  const catOpts='<option value="">— เลือกรายการ —</option>'+CATS.map(x=>'<option value="'+x.id+'">'+x.e+' '+x.n+'</option>').join('')+'<option value="__x">✏️ กรอกเอง…</option>';
   mountSheet('<div class="sh-hero"><div class="sh-art">'+WALLET+'</div><div><h3>ลงรายการใหม่</h3><p>บอกยอดกับหมวด แอพจะกระจายลงตารางให้</p></div></div>'
    +'<div class="fgrp">'
-   +'<div class="field"><label for="f-name">รายการ</label><input id="f-name" placeholder="เช่น จองโรงแรม, เงินออม" value="'+esc(f.name)+'"></div>'
-   +'<div class="field"><label for="f-cat">หมวดค่าใช้จ่าย</label><select id="f-cat">'+catOpts+'</select><input id="f-catx" placeholder="พิมพ์ชื่อหมวดเอง เช่น ค่าเรียน" style="display:none;margin-top:6px"></div>'
+   +'<div class="field"><label for="f-cat">รายการ / หมวดค่าใช้จ่าย</label><select id="f-cat">'+catOpts+'</select><input id="f-catx" placeholder="พิมพ์ชื่อรายการเอง เช่น จองโรงแรม, เงินออม" style="display:none;margin-top:6px"></div>'
    +'<div class="two"><div class="field"><label for="f-amt">ยอด (บาท)</label><input id="f-amt" inputmode="numeric" class="num" placeholder="0" value="'+(f.amt||'')+'"></div>'
    +'<div class="field"><label for="f-col">จ่ายผ่าน</label><select id="f-col">'+colOptions(col)+'</select></div></div></div>'
    +'<div class="hint" id="f-hint"></div>'
@@ -999,7 +998,7 @@ function readForm(e){
   }
   const g=x=>document.getElementById(x);
   if(id==='f-col'&&g('f-col').value==='__new'){openNewCol(true);return}
-  f.name=g('f-name').value;f.cat=g('f-cat').value;f.catx=g('f-catx').value;
+  f.cat=g('f-cat').value;f.catx=g('f-catx').value;f.name=f.cat==='__x'?f.catx.trim():(f.cat?catMeta(f.cat).n:'');
   g('f-catx').style.display=f.cat==='__x'?'':'none';
   if(id==='f-cat'||id==='f-catx')return;
   f.amt=parseInt(g('f-amt').value.replace(/\D/g,''),10)||0;
@@ -1036,7 +1035,7 @@ function apply(){
     closeSheet(true);s.tab='table';render();toast('แบ่งจ่าย '+col.name+' เป็น '+ks+' เดือนแล้ว');return;
   }
   const plan=planAdd(f);
-  if(!Object.keys(plan).length||!f.name.trim()){toast('ใส่ชื่อรายการและยอดเงินก่อนครับ');return}
+  if(!Object.keys(plan).length||!f.name.trim()){toast('เลือกรายการและใส่ยอดเงินก่อนครับ');return}
   const k=f.to-f.from+1,sum=Object.values(plan).reduce((t,v)=>t+v,0),intr=Math.max(0,sum-Math.round(f.amt));
   const cat=f.cat==='__x'?(f.catx.trim()?'x:'+f.catx.trim():''):f.cat;
   s.entries.push({id:'e'+Date.now(),kind:'add',name:f.name.trim(),cat,col:f.col,amounts:plan,k,from:f.from,interest:intr,
