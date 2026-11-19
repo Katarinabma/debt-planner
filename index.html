@@ -144,12 +144,15 @@ table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:
 .grid thead th:first-child{background:var(--bg);z-index:3}
 .grid tr.cur th:first-child{background:var(--accent);color:#fff}
 .grid tr.past td,.grid tr.past th{color:var(--muted)}
-.grid tr.past td{text-decoration:line-through}
+.grid td.paid{text-decoration:line-through;opacity:.5}
 .grid td.tint{background:var(--warn-bg);color:var(--warn);font-weight:600;text-decoration:none}
 .grid td.rem{font-weight:700}
 .grid td.rem.neg{color:var(--bad);background:var(--bad-bg)}
 .grid td.usedfor{color:var(--muted);text-align:left}
 .grid td.cellbtn{cursor:pointer}
+.grid td.ovr{background:#e6f0ff;color:#1f5eff;font-weight:600}
+.grid td.cellbtn:hover{outline:2px solid var(--accent);outline-offset:-2px}
+@media(prefers-color-scheme:dark){.grid td.ovr{background:#1b2a4a;color:#8fb4ff}}
 .legend{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
 .legend i{width:14px;height:14px;border-radius:4px;background:var(--warn-bg);border:1px solid var(--warn)}
 .entry{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
@@ -309,7 +312,7 @@ const initial=()=>{
   buildMonths(st.y,st.m);
   COLS=DEFAULT_COLS.map(c=>Object.assign({},c));
   setHol([]);
-  return {tab:'month',mi:0,n:3,paid:{},entries:[],baseEdit:{},sal:rep(0,NM),carry:rep(0,NM),hol:[],resetArm:false,form:null,detail:null,newcol:null,editcol:null,delArm:null};
+  return {tab:'month',mi:0,n:3,paid:{},entries:[],baseEdit:{},over:{},sal:rep(0,NM),carry:rep(0,NM),hol:[],resetArm:false,form:null,detail:null,newcol:null,editcol:null,delArm:null};
 };
 let s={n:3};
 s=initial();
@@ -317,7 +320,9 @@ s.mi=cur();
 
 const baseOf=(col,mi)=>{const k=col+'-'+mi;return k in s.baseEdit?s.baseEdit[k]:0};
 const entryAmt=(col,mi)=>s.entries.filter(e=>e.col===col).reduce((t,e)=>t+(e.amounts[mi]||0),0);
-const cell=(col,mi)=>baseOf(col,mi)+entryAmt(col,mi);
+const origCell=(col,mi)=>baseOf(col,mi)+entryAmt(col,mi);
+const isOver=(col,mi)=>(col+'-'+mi) in s.over;
+const cell=(col,mi)=>isOver(col,mi)?s.over[col+'-'+mi]:origCell(col,mi);
 const total=mi=>COLS.reduce((t,c)=>t+cell(c.id,mi),0);
 const remaining=mi=>salOf(mi)+carryOf(mi)-total(mi);
 const hashId=t=>{let x=0;for(const ch of String(t))x=(x*31+ch.charCodeAt(0))>>>0;return x};
@@ -353,17 +358,18 @@ function cycleItems(mi){
 function rowHtml(x,mi){
   const st=statusOf(x.paid,x.due);
   return '<div class="rw'+(x.paid?' done':'')+'" data-id="'+x.c.id+'"><div class="rbg">'+ic.ok+(x.paid?'ปัดเพื่อยกเลิกการติ๊ก':'ปัดขวาเพื่อติ๊กจ่ายแล้ว')+'</div>'
-   +'<div class="rfg" data-id="'+x.c.id+'">'+avatar(x.c)
+   +'<div class="rfg" data-id="'+x.c.id+'" data-mi="'+mi+'">'+avatar(x.c)
    +'<button class="namebtn" data-act="detail" data-id="'+x.c.id+'" data-mi="'+mi+'"><strong>'+esc(x.c.name)+'</strong><small class="'+st.c+'">'+dm(x.due)+' · '+st.t+'</small><small class="more">ดูรายการ ('+itemCount(x.c.id,mi)+') ›</small></button>'
    +'<div class="rcol"><b class="num">฿'+fmt(x.amt)+'</b><small class="num '+(x.after<0?'neg':'')+'">เหลือ '+(x.after<0?'-':'')+'฿'+fmt(Math.abs(x.after))+'</small></div>'
-   +'<button class="tick" data-act="pay" data-id="'+x.c.id+'" aria-pressed="'+x.paid+'" aria-label="จ่ายแล้ว '+esc(x.c.name)+'">'+ic.ok+'</button></div></div>';
+   +'<button class="tick" data-act="pay" data-id="'+x.c.id+'" data-mi="'+mi+'" aria-pressed="'+x.paid+'" aria-label="จ่ายแล้ว '+esc(x.c.name)+'">'+ic.ok+'</button></div></div>';
 }
-function viewMonth(){
-  const mi=s.mi,S=sdN(mi,s.n),E=cycleEnd(mi),sal=salOf(mi),carry=carryOf(mi);
+function cycleSection(mi){
+  const S=sdN(mi,s.n),E=cycleEnd(mi),sal=salOf(mi),carry=carryOf(mi);
   const items=cycleItems(mi);
   const tot=items.reduce((t,x)=>t+x.amt,0),paidSum=items.filter(x=>x.paid).reduce((t,x)=>t+x.amt,0);
   const left=sal+carry-tot,pct=tot?Math.min(100,Math.round(paidSum/tot*100)):100;
-  const isCur=mi===cur();
+  const cu=cur(),tag=mi===cu?'รอบปัจจุบัน':mi<cu?'รอบที่ผ่านมา':'รอบถัดไป';
+  const head='<div class="sec-h" style="margin-top:6px"><h2>เงินเดือน '+labFull(mi)+' ใช้สำหรับ '+usedFor(mi)+'</h2><span>'+tag+'</span></div>';
   const hero='<section class="hero'+(left<0?' bad':'')+'">'
     +'<div class="hero-top"><span>เงินเดือนเข้า '+WD[S.getDay()]+' '+dm(S)+'</span><span class="pill">ใช้สำหรับ '+usedFor(mi)+'</span></div>'
     +'<div class="hero-big num">฿'+fmt(sal)+'</div>'+(carry?'<div class="hero-note" style="margin:-4px 0 10px">+ เงินยกมา ฿'+fmt(carry)+' · รวมใช้ได้ ฿'+fmt(sal+carry)+'</div>':'')
@@ -371,12 +377,15 @@ function viewMonth(){
     +'<div class="hero-stats"><div><small>จ่ายแล้ว</small><b class="num">฿'+fmt(paidSum)+'</b></div><div><small>ยังต้องจ่าย</small><b class="num">฿'+fmt(tot-paidSum)+'</b></div><div><small>เหลือหลังจ่ายครบ</small><b class="num">'+(left<0?'-':'')+'฿'+fmt(Math.abs(left))+'</b></div></div>'
     +'<div class="hero-note">'+(left<0?'รอบนี้ขาด ฿'+fmt(-left)+' ลองแบ่งจ่ายหรือเลื่อนบิลไปรอบหน้า':'รอบ '+dm(S)+' – '+dm(E)+' · เหลือไว้ใช้ ฿'+fmt(left))+'</div>'
     +'</section>';
-  const nav='<div class="cnav"><button data-act="mv" data-d="-1" aria-label="รอบก่อน"'+(mi===0?' disabled':'')+'>‹</button><div><b>รอบเงินเดือน '+labFull(mi)+'</b><small>'+(isCur?'รอบปัจจุบัน':mi<cur()?'รอบที่ผ่านมา':'รอบถัดไป')+'</small></div><button data-act="mv" data-d="1" aria-label="รอบถัดไป"'+(mi===MONTHS.length-1?' disabled':'')+'>›</button></div>';
   const listHtml='<div class="sec-h"><h2>รายการที่ต้องจ่าย</h2><span>เรียงตามวันครบกำหนด · '+items.filter(x=>x.paid).length+'/'+items.length+' จ่ายแล้ว</span></div>'
-    +'<div class="list" id="list">'+(items.map(x=>rowHtml(x,mi)).join('')||'<div class="card note">ไม่มีรายการในรอบนี้</div>')+'</div>'
-    +'<div class="hint2">ปัดรายการไปทางขวาเพื่อติ๊กว่าจ่ายแล้ว หรือกดวงกลมด้านขวา</div>';
-  const onboard=(sal===0&&tot===0)?'<div class="card"><b style="font-family:var(--display);font-size:17px">เริ่มต้นใช้งาน</b><p class="note">ทำ 2 ขั้นตอน แล้วรายการที่ต้องจ่ายจะขึ้นที่นี่</p><div class="cc-act"><button class="btn sm" data-act="gosettings">1. ตั้งเงินเดือน</button><button class="btn sm" data-act="newcol">2. เพิ่มบัตร/หนี้</button></div></div>':'';
-  return '<div class="cyc"><div class="left">'+nav+hero+'</div><div class="right">'+onboard+listHtml+'</div></div>';
+    +'<div class="list" id="list-'+mi+'">'+(items.map(x=>rowHtml(x,mi)).join('')||'<div class="card note">ไม่มีรายการในรอบนี้</div>')+'</div>';
+  return head+'<div class="cyc"><div class="left">'+hero+'</div><div class="right">'+listHtml+'</div></div>';
+}
+function viewMonth(){
+  const mi=s.mi,cu=cur(),two=mi+1<MONTHS.length;
+  const nav='<div class="cnav"><button data-act="mv" data-d="-1" aria-label="ย้อนไป 1 รอบ"'+(mi===0?' disabled':'')+'>‹</button><div><b>'+labFull(mi)+(two?' และ '+labFull(mi+1):'')+'</b><small>'+(mi===cu?'รอบปัจจุบัน + รอบถัดไป':'เลื่อนดูรอบอื่น')+'</small></div><button data-act="mv" data-d="1" aria-label="ไปข้างหน้า 1 รอบ"'+(mi>=MONTHS.length-2?' disabled':'')+'>›</button></div>';
+  const onboard=(salOf(mi)===0&&total(mi)===0&&(!two||(salOf(mi+1)===0&&total(mi+1)===0)))?'<div class="card"><b style="font-family:var(--display);font-size:17px">เริ่มต้นใช้งาน</b><p class="note">ทำ 2 ขั้นตอน แล้วรายการที่ต้องจ่ายจะขึ้นที่นี่</p><div class="cc-act"><button class="btn sm" data-act="gosettings">1. ตั้งเงินเดือน</button><button class="btn sm" data-act="newcol">2. เพิ่มบัตร/หนี้</button></div></div>':'';
+  return nav+onboard+cycleSection(mi)+(two?cycleSection(mi+1):'')+'<div class="hint2">ปัดรายการไปทางขวาเพื่อติ๊กว่าจ่ายแล้ว หรือกดวงกลมด้านขวา</div>';
 }
 
 /* ---------- summary table ---------- */
@@ -387,7 +396,7 @@ function viewTable(){
   for(let i=0;i<MONTHS.length;i++){
     const tot=total(i),left=salOf(i)+carryOf(i)-tot;
     rows+='<tr class="'+(i===cu?'cur ':'')+(i<cu?'past':'')+'"><th scope="row">'+lab(i)+'</th><td>'+fmt(salOf(i))+'</td><td>'+(carryOf(i)?fmt(carryOf(i)):'')+'</td>'
-      +COLS.map(c=>{const v=cell(c.id,i),t=entryAmt(c.id,i)!==0;return '<td class="cellbtn '+(t?'tint':'')+'" data-act="detail" data-id="'+c.id+'" data-mi="'+i+'">'+(v?fmt(v):'')+'</td>'}).join('')
+      +COLS.map(c=>{const v=cell(c.id,i),ov=isOver(c.id,i),t=!ov&&entryAmt(c.id,i)!==0,pd=!!s.paid[i+'-'+c.id];return '<td class="cellbtn'+(t?' tint':'')+(ov?' ovr':'')+(pd?' paid':'')+'" data-act="cellsheet" data-id="'+c.id+'" data-mi="'+i+'" tabindex="0" role="button" aria-label="'+esc(c.name)+' '+lab(i)+(pd?' จ่ายแล้ว':'')+'">'+(v||ov?fmt(v):'')+'</td>'}).join('')
       +'<td>'+fmt(tot)+'</td><td class="rem '+(left<0?'neg':'')+'">'+(left<0?'-':'')+fmt(Math.abs(left))+'</td><td class="usedfor">'+usedFor(i)+'</td></tr>';
   }
   let negs=0,sum=0;
@@ -398,7 +407,7 @@ function viewTable(){
   return '<div class="tstats"><div class="card"><small>ต้องจ่ายรวม '+lab(cu)+' – '+lab(MONTHS.length-1)+'</small><b class="num">฿'+fmt(sum)+'</b></div>'
     +'<div class="card"><small>รอบที่เงินไม่พอ</small><b class="num '+(negs?'neg':'')+'">'+negs+' รอบ</b></div></div>'
     +'<div class="tbl" tabindex="0" aria-label="ตารางสรุปรายเดือน"><table class="grid"><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'
-    +'<div class="legend"><i></i>สีส้ม = ยอดจากรายการที่ลงใหม่ · แตะช่องไหนก็ได้เพื่อดูรายการข้างใน · เงินเดือนของแถว ใช้สำหรับเดือนในคอลัมน์ขวาสุด</div>'
+    +'<div class="legend"><i></i>สีส้ม = ยอดจากรายการที่ลงใหม่ · สีฟ้า = แก้ยอดเอง · ขีดฆ่า = จ่ายแล้ว · แตะช่องเพื่อติ๊กจ่าย แก้ยอด หรือดูรายการข้างใน · เงินเดือนของแถว ใช้สำหรับเดือนในคอลัมน์ขวาสุด</div>'
     +'<div class="sec-h"><h2>รายการที่ลงไว้</h2><span>ลบแล้วยอดทุกเดือนกลับเอง</span></div><div class="card">'+ents+'</div>';
 }
 
@@ -610,7 +619,7 @@ function setK(k){
 }
 function closeSheet(silent){
   const o=document.getElementById('ov');if(o)o.remove();
-  s.form=null;s.detail=null;s.newcol=null;s.editcol=null;s.delArm=null;
+  s.form=null;s.detail=null;s.newcol=null;s.editcol=null;s.delArm=null;s.cellsel=null;
   if(!silent)render();
 }
 function apply(){
@@ -651,6 +660,20 @@ function detailInner(){
 function openDetail(col,mi){s.detail={col,mi};mountSheet(detailInner())}
 function repaintDetail(){const sh=document.querySelector('#ov .sheet');if(sh)sh.innerHTML=detailInner()}
 
+/* ---------- table cell: paid / edit amount ---------- */
+function cellInner(){
+  const {col,mi}=s.cellsel,c=COLS.find(x=>x.id===col);
+  const pd=!!s.paid[mi+'-'+col],ov=isOver(col,mi),orig=origCell(col,mi);
+  return '<h3>'+esc(c.name)+' · '+labFull(mi)+'</h3>'
+   +'<button class="btn'+(pd?' ghost':'')+'" data-act="cellpay">'+(pd?'ยกเลิกการติ๊ก (ยังไม่จ่าย)':'ติ๊กว่าจ่ายแล้ว')+'</button>'
+   +'<div class="field"><label for="c-amt">ยอดช่องนี้ (บาท)</label><input id="c-amt" class="num" inputmode="numeric" value="'+(cell(col,mi)||'')+'" placeholder="0"></div>'
+   +'<p class="note" style="margin:0" id="c-note">'+(ov?'แก้ยอดเองอยู่ · ยอดตามรายการเดิม ฿'+fmt(orig):'ยอดตามรายการ ฿'+fmt(orig)+' · พิมพ์ยอดใหม่เพื่อแก้เฉพาะช่องนี้')+'</p>'
+   +'<div class="cc-act" style="margin:0">'+(ov?'<button class="btn ghost sm" data-act="cellreset">คืนยอดเดิม</button>':'')+'<button class="btn ghost sm" data-act="celldetail">ดูรายการข้างใน</button></div>'
+   +'<button class="btn" data-act="close">เสร็จ</button>';
+}
+function repaintCell(){const sh=document.querySelector('#ov .sheet');if(sh)sh.innerHTML=cellInner()}
+function openCell(col,mi){s.cellsel={col,mi};mountSheet(cellInner())}
+
 /* ---------- edit / delete a card or item ---------- */
 function openEditCol(id){
   const c=COLS.find(x=>x.id===id);if(!c)return;
@@ -678,6 +701,7 @@ function delCol(){
   COLS=COLS.filter(c=>c.id!==id);
   s.entries=s.entries.filter(e=>e.col!==id);
   Object.keys(s.baseEdit).forEach(k=>{if(k.indexOf(id+'-')===0)delete s.baseEdit[k]});
+  Object.keys(s.over).forEach(k=>{if(k.indexOf(id+'-')===0)delete s.over[k]});
   Object.keys(s.paid).forEach(k=>{if(k.slice(k.indexOf('-')+1)===id)delete s.paid[k]});
   closeSheet(true);render();toast('ลบแล้ว');
 }
@@ -739,14 +763,14 @@ function chipHtml(){
 function paintChip(){const el=document.getElementById('acct');if(el)el.outerHTML=chipHtml()}
 function setAcct(st,err){acct.status=st;acct.err=err||'';paintChip();const a=document.getElementById('acct-body');if(a)a.innerHTML=acctInner()}
 function persist(){
-  return {v:2,start:START,n:s.n,sal:s.sal,carry:s.carry,paid:s.paid,entries:s.entries,baseEdit:s.baseEdit,cols:COLS,hol:s.hol||[]};
+  return {v:2,start:START,n:s.n,sal:s.sal,carry:s.carry,paid:s.paid,entries:s.entries,baseEdit:s.baseEdit,over:s.over,cols:COLS,hol:s.hol||[]};
 }
 function applyData(d){
   if(!d||!Array.isArray(d.cols)||!Array.isArray(d.sal))return false;
   const pad=(a,fill)=>{const o=a.slice(0,NM);while(o.length<NM)o.push(fill===undefined?(o.length?o[o.length-1]:0):fill);return o};
   const st=d.start||defaultStart();
   buildMonths(st.y,st.m);
-  s.n=d.n||3;s.sal=pad(d.sal);s.carry=pad(d.carry||[],0);s.paid=d.paid||{};s.entries=d.entries||[];s.baseEdit=d.baseEdit||{};
+  s.n=d.n||3;s.sal=pad(d.sal);s.carry=pad(d.carry||[],0);s.paid=d.paid||{};s.entries=d.entries||[];s.baseEdit=d.baseEdit||{};s.over=d.over||{};
   COLS=d.cols;s.hol=d.hol||[];setHol(s.hol);
   s.mi=cur();
   return true;
@@ -878,8 +902,12 @@ document.addEventListener('click',e=>{
   const a=t.dataset.act;
   if(a==='tab'){s.tab=t.dataset.t;render()}
   else if(a==='mv'){s.mi=Math.min(MONTHS.length-1,Math.max(0,s.mi+ +t.dataset.d));render()}
-  else if(a==='pay'){const k=s.mi+'-'+t.dataset.id;s.paid[k]=!s.paid[k];render()}
+  else if(a==='pay'){const k=(t.dataset.mi||s.mi)+'-'+t.dataset.id;s.paid[k]=!s.paid[k];render()}
   else if(a==='detail')openDetail(t.dataset.id,+t.dataset.mi);
+  else if(a==='cellsheet')openCell(t.dataset.id,+t.dataset.mi);
+  else if(a==='cellpay'){const k=s.cellsel.mi+'-'+s.cellsel.col;s.paid[k]=!s.paid[k];repaintCell();queueSave()}
+  else if(a==='cellreset'){delete s.over[s.cellsel.col+'-'+s.cellsel.mi];repaintCell();queueSave()}
+  else if(a==='celldetail'){const q=s.cellsel;closeSheet();openDetail(q.col,q.mi)}
   else if(a==='dmv'){s.detail.mi=Math.min(MONTHS.length-1,Math.max(0,s.detail.mi+ +t.dataset.d));repaintDetail()}
   else if(a==='delE'){s.entries=s.entries.filter(x=>x.id!==t.dataset.id);repaintDetail();toast('ลบรายการแล้ว ยอดทุกเดือนกลับเป็นเดิม')}
   else if(a==='add'){const keep=s.detail&&s.detail.col;openAdd(t.dataset.id||keep,!!t.dataset.id)}
@@ -912,7 +940,7 @@ let drag=null;
 document.addEventListener('pointerdown',e=>{
   const fg=e.target.closest('.rfg');
   if(!fg||e.target.closest('.tick'))return;
-  drag={fg,x:e.clientX,y:e.clientY,dx:0,on:false,id:fg.dataset.id};
+  drag={fg,x:e.clientX,y:e.clientY,dx:0,on:false,id:fg.dataset.id,mi:fg.dataset.mi};
 });
 document.addEventListener('pointermove',e=>{
   if(!drag)return;
@@ -934,12 +962,17 @@ function endDrag(){
   swallow=true;setTimeout(()=>{swallow=false},120);
   d.fg.classList.remove('drag');d.fg.style.transform='';
   d.fg.parentElement.classList.remove('armed');setTimeout(()=>{if(d.fg.parentElement)d.fg.parentElement.classList.remove('swiping')},200);
-  if(d.dx>90){const k=s.mi+'-'+d.id;s.paid[k]=!s.paid[k];setTimeout(render,180)}
+  if(d.dx>90){const k=(d.mi||s.mi)+'-'+d.id;s.paid[k]=!s.paid[k];setTimeout(render,180)}
 }
 document.addEventListener('pointerup',endDrag);
 document.addEventListener('pointercancel',endDrag);
 function onField(e){
   const id=e.target.id||'';
+  if(id==='c-amt'&&s.cellsel){
+    const {col,mi}=s.cellsel,raw=e.target.value.replace(/\D/g,''),v=parseInt(raw,10)||0,k=col+'-'+mi;
+    if(raw!==''&&v!==origCell(col,mi))s.over[k]=v;else delete s.over[k];
+    queueSave();return;
+  }
   if(id==='d-base'&&s.detail){
     s.baseEdit[s.detail.col+'-'+s.detail.mi]=parseInt(e.target.value.replace(/\D/g,''),10)||0;
     document.getElementById('dt-total').textContent='฿'+fmt(cell(s.detail.col,s.detail.mi));
