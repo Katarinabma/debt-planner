@@ -84,7 +84,7 @@ nav button[aria-current="page"]{color:var(--accent);background:var(--accent-soft
 .rbg{position:absolute;inset:0;display:flex;align-items:center;padding-left:18px;color:#fff;font-weight:600;font-size:14px;gap:8px;opacity:0;pointer-events:none}
 .rw.swiping .rbg{opacity:1}
 .rbg svg{width:20px;height:20px}
-.rfg{position:relative;z-index:1;display:grid;grid-template-columns:44px 1fr auto 34px;gap:12px;align-items:center;background:var(--surface);padding:12px 12px;touch-action:pan-y;user-select:none;-webkit-user-select:none;box-shadow:var(--shadow);transition:transform .2s ease}
+.rfg{position:relative;z-index:1;display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;background:var(--surface);padding:12px 12px;touch-action:pan-y;user-select:none;-webkit-user-select:none;box-shadow:var(--shadow);transition:transform .2s ease}
 .rfg.drag{transition:none}
 .rw.armed .rfg{box-shadow:none}
 .av{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.2px}
@@ -101,6 +101,15 @@ nav button[aria-current="page"]{color:var(--accent);background:var(--accent-soft
 .rcol small{font-size:11.5px;color:var(--muted)}
 .rw.done .av,.rw.done .namebtn,.rw.done .rcol{opacity:.55}
 .rw.done .namebtn strong,.rw.done .rcol b{text-decoration:line-through}
+.rsub{grid-column:1/-1;display:flex;gap:8px}
+.chip{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:12px;padding:8px 6px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.chip svg{width:16px;height:16px;opacity:.35}
+.chip.on{color:#fff;border-color:transparent}
+.chip.on svg{opacity:1}
+.chip.full.on{background:var(--good)}
+.chip.part.on{background:var(--warn)}
+.chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.splitnote{color:var(--warn);font-weight:600}
 .tick{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);background:transparent;color:transparent;cursor:pointer;display:grid;place-items:center;padding:0;transition:all .15s}
 .tick svg{width:17px;height:17px}
 .tick[aria-pressed="true"]{background:var(--good);border-color:var(--good);color:#fff}
@@ -350,22 +359,30 @@ function statusOf(paid,due){
   if(diff===0)return {t:'ครบกำหนดวันนี้',c:'soon'};
   return {t:'เลยกำหนด '+(-diff)+' วัน',c:'late'};
 }
+const splitEntry=(col,mi)=>s.entries.find(e=>e.kind==='split'&&e.col===col&&(e.amounts[mi]||0)<0);
+const splitOut=(col,mi)=>s.entries.filter(e=>e.kind==='split'&&e.col===col).reduce((t,e)=>t+((e.amounts[mi]||0)<0?-e.amounts[mi]:0),0);
 function itemCount(colId,mi){return (baseOf(colId,mi)>0?1:0)+s.entries.filter(e=>e.col===colId&&e.amounts[mi]).length}
 function cycleItems(mi){
   const sal=salOf(mi)+carryOf(mi);
-  const list=COLS.filter(c=>cell(c.id,mi)>0).map(c=>({c,amt:cell(c.id,mi),due:dueDate(c,mi),paid:!!s.paid[mi+'-'+c.id]}));
+  const list=COLS.filter(c=>cell(c.id,mi)>0||splitOut(c.id,mi)>0).map(c=>({c,amt:cell(c.id,mi),due:dueDate(c,mi),paid:!!s.paid[mi+'-'+c.id],out:splitOut(c.id,mi)}));
   list.sort((a,b)=>a.due-b.due||a.c.name.localeCompare(b.c.name));
   let run=sal;
   list.forEach(x=>{run-=x.amt;x.after=run});
   return list;
 }
 function rowHtml(x,mi){
-  const st=statusOf(x.paid,x.due);
-  return '<div class="rw'+(x.paid?' done':'')+'" data-id="'+x.c.id+'"><div class="rbg">'+ic.ok+(x.paid?'ปัดเพื่อยกเลิกการติ๊ก':'ปัดขวาเพื่อติ๊กจ่ายแล้ว')+'</div>'
-   +'<div class="rfg" data-id="'+x.c.id+'" data-mi="'+mi+'">'+avatar(x.c)
-   +'<button class="namebtn" data-act="detail" data-id="'+x.c.id+'" data-mi="'+mi+'"><strong>'+esc(x.c.name)+'</strong><small class="'+st.c+'">'+dm(x.due)+' · '+st.t+'</small><small class="more">ดูรายการ ('+itemCount(x.c.id,mi)+') ›</small></button>'
+  const st=statusOf(x.paid,x.due),id=x.c.id,sp=x.out>0;
+  const full=x.paid&&x.amt>0;
+  return '<div class="rw'+(full?' done':'')+'" data-id="'+id+'"><div class="rbg">'+ic.ok+(x.paid?'ปัดเพื่อยกเลิกการติ๊ก':'ปัดขวาเพื่อติ๊กจ่ายหมด')+'</div>'
+   +'<div class="rfg" data-id="'+id+'" data-mi="'+mi+'">'+avatar(x.c)
+   +'<button class="namebtn" data-act="detail" data-id="'+id+'" data-mi="'+mi+'"><strong>'+esc(x.c.name)+'</strong><small class="'+st.c+'">'+dm(x.due)+' · '+(x.amt>0?st.t:'ไม่มียอดจ่ายรอบนี้')+'</small>'
+   +(sp?'<small class="splitnote">แบ่งจ่าย ยกไป ฿'+fmt(x.out)+'</small>':'')
+   +'<small class="more">ดูรายการ ('+itemCount(id,mi)+') ›</small></button>'
    +'<div class="rcol"><b class="num">฿'+fmt(x.amt)+'</b><small class="num '+(x.after<0?'neg':'')+'">เหลือ '+(x.after<0?'-':'')+'฿'+fmt(Math.abs(x.after))+'</small></div>'
-   +'<button class="tick" data-act="pay" data-id="'+x.c.id+'" data-mi="'+mi+'" aria-pressed="'+x.paid+'" aria-label="จ่ายแล้ว '+esc(x.c.name)+'">'+ic.ok+'</button></div></div>';
+   +'<div class="rsub">'
+   +(x.amt>0?'<button class="chip full'+(x.paid?' on':'')+'" data-act="pay" data-id="'+id+'" data-mi="'+mi+'" aria-pressed="'+x.paid+'">'+ic.ok+(sp?'จ่ายส่วนที่เหลือ':'จ่ายหมด')+'</button>':'')
+   +'<button class="chip part'+(sp?' on':'')+'" data-act="spl" data-id="'+id+'" data-mi="'+mi+'" aria-pressed="'+sp+'">'+ic.ok+(sp?'แบ่งจ่ายแล้ว (แตะเพื่อดู/ยกเลิก)':'แบ่งจ่าย')+'</button>'
+   +'</div></div></div>';
 }
 function cycleSection(mi){
   const S=sdN(mi,s.n),E=cycleEnd(mi),sal=salOf(mi),carry=carryOf(mi);
@@ -389,7 +406,7 @@ function viewMonth(){
   const mi=s.mi,cu=cur(),two=mi+1<MONTHS.length;
   const nav='<div class="cnav"><button data-act="mv" data-d="-1" aria-label="ย้อนไป 1 รอบ"'+(mi===0?' disabled':'')+'>‹</button><div><b>'+labFull(mi)+(two?' และ '+labFull(mi+1):'')+'</b><small>'+(mi===cu?'รอบปัจจุบัน + รอบถัดไป':'เลื่อนดูรอบอื่น')+'</small></div><button data-act="mv" data-d="1" aria-label="ไปข้างหน้า 1 รอบ"'+(mi>=MONTHS.length-2?' disabled':'')+'>›</button></div>';
   const onboard=(salOf(mi)===0&&total(mi)===0&&(!two||(salOf(mi+1)===0&&total(mi+1)===0)))?'<div class="card"><b style="font-family:var(--display);font-size:17px">เริ่มต้นใช้งาน</b><p class="note">ทำ 2 ขั้นตอน แล้วรายการที่ต้องจ่ายจะขึ้นที่นี่</p><div class="cc-act"><button class="btn sm" data-act="gosettings">1. ตั้งเงินเดือน</button><button class="btn sm" data-act="newcol">2. เพิ่มบัตร/หนี้</button></div></div>':'';
-  return nav+onboard+cycleSection(mi)+(two?cycleSection(mi+1):'')+'<div class="hint2">ปัดรายการไปทางขวาเพื่อติ๊กว่าจ่ายแล้ว หรือกดวงกลมด้านขวา</div>';
+  return nav+onboard+cycleSection(mi)+(two?cycleSection(mi+1):'')+'<div class="hint2">ปัดรายการไปทางขวา หรือกด "จ่ายหมด" เมื่อจ่ายแล้ว · กด "แบ่งจ่าย" เพื่อยกยอดไปเดือนถัดไปพร้อมดอกเบี้ยคร่าวๆ</div>';
 }
 
 /* ---------- summary table ---------- */
@@ -568,7 +585,53 @@ function openAdd(colId,blank){
    +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="apply" style="flex:1">ลงรายการ</button></div>');
   refreshForm();
 }
-function openSplit(colId){
+function splCalc(){
+  const q=s.sp,A=cell(q.col,q.mi),pay=Math.min(A,Math.max(0,q.pay)),R=A-pay;
+  const maxK=Math.max(1,Math.min(6,MONTHS.length-1-q.mi)),k=Math.min(maxK,Math.max(1,q.k));
+  const i=(q.rate||0)/1200;
+  const intr=R<=0||!i?0:Math.round((k===1?R*i:(R*i/(1-Math.pow(1+i,-k)))*k-R));
+  const T=R+intr,base=Math.floor(T/k),first=base+T-base*k,out={};
+  out[q.mi]=-R;for(let j=1;j<=k;j++)out[q.mi+j]=j===1?first:base;
+  return {A,pay,R,k,maxK,intr,T,out};
+}
+function splPv(){
+  const q=s.sp,c=splCalc();
+  const rows=Object.keys(c.out).map(Number).sort((a,b)=>a-b).filter(i=>i!==q.mi).map(i=>{
+    const after=remaining(i)-c.out[i];
+    return '<div class="pv-r"><span>'+lab(i)+'</span><span class="num">฿'+fmt(cell(q.col,i)+c.out[i])+'</span><span class="'+afterCls(after)+'">'+(after<0?'-':'')+fmt(Math.abs(after))+'</span></div>';
+  }).join('');
+  const bad=Object.keys(c.out).map(Number).filter(i=>i!==q.mi&&remaining(i)-c.out[i]<0).length;
+  return '<div class="check info">ยกไป ฿'+fmt(c.R)+' · ดอกเบี้ยประมาณ ฿'+fmt(c.intr)+' (คิดคร่าวๆ จากยอดคงเหลือ ผ่อนเท่ากันทุกเดือน) · รวมที่ต้องจ่ายเพิ่ม ฿'+fmt(c.T)+'</div>'
+   +'<div class="pv"><div class="pv-h"><span>รอบ</span><span>ยอดหลังแบ่ง</span><span>คงเหลือ</span></div>'+rows+'</div>'
+   +(bad?'<div class="check bad">มี '+bad+' รอบที่เงินไม่พอ</div>':'<div class="check ok">ทุกรอบที่เกี่ยวข้องยังเหลือเงิน</div>');
+}
+function openSpl(colId,mi){
+  const c=COLS.find(x=>x.id===colId),ex=splitEntry(colId,mi);
+  if(ex){
+    mountSheet('<h3>แบ่งจ่าย '+esc(c.name)+' · '+labFull(mi)+'</h3><div class="check info">'+esc(ex.label)+'</div>'
+     +'<button class="btn" data-act="splundo" data-id="'+ex.id+'" style="background:var(--bad)">ยกเลิกการแบ่งจ่าย (ยอดกลับเป็นเดิม)</button><button class="btn ghost" data-act="close">ปิด</button>');
+    return;
+  }
+  const A=cell(colId,mi);
+  if(A<=0){toast('ยังไม่มียอดให้แบ่ง');return}
+  s.sp={col:colId,mi,pay:0,k:1,rate:16};
+  mountSheet('<h3>แบ่งจ่าย '+esc(c.name)+'</h3><p class="note" style="margin:0">ยอดรอบ '+labFull(mi)+' ฿'+fmt(A)+' · ยอดที่ไม่จ่ายตอนนี้จะยกไปเดือนถัดไป</p>'
+   +'<div class="two"><div class="field"><label for="sp-pay">จ่ายรอบนี้ (บาท)</label><input id="sp-pay" class="num" inputmode="numeric" value="0"></div>'
+   +'<div class="field"><label for="sp-rate">ดอกเบี้ย % ต่อปี</label><input id="sp-rate" class="num" inputmode="decimal" value="16"></div></div>'
+   +'<label>ยกไปกี่เดือน: <b id="sp-kv" class="num">1</b><input id="sp-k" type="range" min="1" max="'+splCalc().maxK+'" value="1"></label>'
+   +'<div id="sp-pv">'+splPv()+'</div>'
+   +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="splok" style="flex:1">ยืนยันแบ่งจ่าย</button></div>');
+}
+function splOk(){
+  const q=s.sp;if(!q)return;
+  const c=splCalc(),col=COLS.find(x=>x.id===q.col);
+  if(c.R<=0){toast('ยอดที่ยกไปต้องมากกว่า 0');return}
+  s.entries.push({id:'e'+Date.now(),kind:'split',name:'แบ่งจ่าย '+col.name,col:q.col,amounts:c.out,k:c.k,from:q.mi,interest:c.intr,rate:q.rate,
+    label:'ยก ฿'+fmt(c.R)+' จาก '+lab(q.mi)+' ไป '+lab(q.mi+1)+(c.k>1?' – '+lab(q.mi+c.k):'')+(c.intr?' · ดอกเบี้ยประมาณ ฿'+fmt(c.intr)+' ('+q.rate+'%/ปี)':'')});
+  s.sp=null;closeSheet(true);render();toast('แบ่งจ่าย '+col.name+' แล้ว');
+}
+function openSplit(colId){openSpl(colId,cur())}
+function openSplitOld(colId){
   const c=COLS.find(x=>x.id===colId);
   s.form={kind:'split',col:colId,k:3};
   mountSheet('<h3>แบ่งจ่าย '+esc(c.name)+' ยอดรอบนี้ ฿'+fmt(cell(colId,cur()))+'</h3>'
@@ -623,7 +686,7 @@ function setK(k){
 }
 function closeSheet(silent){
   const o=document.getElementById('ov');if(o)o.remove();
-  s.form=null;s.detail=null;s.newcol=null;s.editcol=null;s.delArm=null;s.cellsel=null;
+  s.form=null;s.detail=null;s.newcol=null;s.editcol=null;s.delArm=null;s.cellsel=null;s.sp=null;
   if(!silent)render();
 }
 function apply(){
@@ -928,6 +991,9 @@ document.addEventListener('click',e=>{
   else if(a==='gosettings'){s.tab='set';render()}
   else if(a==='mkcol')createCol();
   else if(a==='split')openSplit(t.dataset.id);
+  else if(a==='spl')openSpl(t.dataset.id,+t.dataset.mi);
+  else if(a==='splok')splOk();
+  else if(a==='splundo'){s.entries=s.entries.filter(x=>x.id!==t.dataset.id);closeSheet(true);render();toast('ยกเลิกการแบ่งจ่ายแล้ว')}
   else if(a==='q')setK(+t.dataset.k);
   else if(a==='close')closeSheet();
   else if(a==='apply')apply();
@@ -949,7 +1015,7 @@ document.addEventListener('click',e=>{
 let drag=null;
 document.addEventListener('pointerdown',e=>{
   const fg=e.target.closest('.rfg');
-  if(!fg||e.target.closest('.tick'))return;
+  if(!fg||e.target.closest('.chip'))return;
   drag={fg,x:e.clientX,y:e.clientY,dx:0,on:false,id:fg.dataset.id,mi:fg.dataset.mi};
 });
 document.addEventListener('pointermove',e=>{
@@ -978,6 +1044,13 @@ document.addEventListener('pointerup',endDrag);
 document.addEventListener('pointercancel',endDrag);
 function onField(e){
   const id=e.target.id||'';
+  if(id.indexOf('sp-')===0&&s.sp){
+    if(id==='sp-pay')s.sp.pay=parseInt(e.target.value.replace(/\D/g,''),10)||0;
+    if(id==='sp-rate')s.sp.rate=Math.max(0,parseFloat(e.target.value)||0);
+    if(id==='sp-k'){s.sp.k=+e.target.value;document.getElementById('sp-kv').textContent=s.sp.k}
+    const pv=document.getElementById('sp-pv');if(pv)pv.innerHTML=splPv();
+    return;
+  }
   if(id==='c-amt'&&s.cellsel){
     const {col,mi}=s.cellsel,raw=e.target.value.replace(/\D/g,''),v=parseInt(raw,10)||0,k=col+'-'+mi;
     if(raw!==''&&v!==origCell(col,mi))s.over[k]=v;else delete s.over[k];
