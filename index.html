@@ -525,19 +525,49 @@ function viewSettings(){
 }
 
 /* ---------- plans ---------- */
+const dd=(a,b)=>Math.max(0,Math.round((b-a)/864e5));
+const parseD=t=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(t||'');return m?new Date(+m[1],+m[2]-1,+m[3]):null};
+const fmtD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const cutOf=(c,y,m)=>{const b=new Date(y,m,1);return new Date(b.getFullYear(),b.getMonth(),dayIn(b.getFullYear(),b.getMonth(),c.cut))};
+function cutBefore(c,date){const y=date.getFullYear(),m=date.getMonth();let d=cutOf(c,y,m);if(d>=date)d=cutOf(c,y,m-1);return d}
+const dueAt=(c,i)=>dueDate(c,Math.max(0,Math.min(MONTHS.length-1,i)));
+/* Interest the way Thai card issuers charge it (daily, on the full amount from the swipe date once the bill is not paid in full,
+   then on the unpaid balance until the next statement). o: {A,tx,P0,pay,kk,rate,Pd:[due dates of the next kk bills]} */
+function revolve(c,o){
+  const r=o.rate/36500,R=Math.max(0,o.A-o.pay),kk=o.kk;
+  const base=Math.floor(R/kk),first=base+R-base*kk;
+  const B=[R],P=[];let rem=R;
+  for(let j=1;j<=kk;j++){const pj=j===1?first:base;P.push(pj);rem-=pj;B.push(rem)}
+  const Pd=[o.P0].concat(o.Pd),S=[null];
+  for(let j=1;j<=kk;j++)S.push(cutBefore(c,Pd[j]));
+  const rows=[];let p1=0,p2=0;
+  for(let j=1;j<=kk;j++){
+    let it;
+    if(j===1){p1=o.A*r*dd(o.tx,Pd[0]);p2=B[0]*r*(dd(Pd[0],S[1])+1);it=p1+p2}
+    else it=B[j-2]*r*dd(S[j-1],Pd[j-1])+B[j-1]*r*(dd(Pd[j-1],S[j])+1);
+    rows.push({P:P[j-1],it:Math.round(it)});
+  }
+  const tail=Math.round(B[kk-1]*r*dd(S[kk],Pd[kk]));
+  return {rows,tail,p1:Math.round(p1),p2:Math.round(p2),R,d1:dd(o.tx,Pd[0]),d2:dd(Pd[0],S[1])+1};
+}
 function cardPlan(f){
   const c=COLS.find(x=>x.id===f.col),A=Math.max(0,Math.round(f.amt||0)),k=f.to-f.from+1;
   if(!c||!c.card||!A||k<1)return null;
-  const i=cardRate(c)/1200,cash=cardType(c)==='cash';
+  const rate=cardRate(c),cash=cardType(c)==='cash',tx=parseD(f.tx)||TODAY;
   const z=f.zero?(f.zm>0?Math.min(k,f.zm):k):0;
   const base=Math.floor(A/k),first=base+A-base*k;
-  let rem=A,tot=0;const rows=[];
-  for(let j=1;j<=k;j++){
-    const P=j===1?first:base;
-    const it=(j>z&&(cash||k>1))?Math.round(rem*i):0;
-    rows.push({P,it});rem-=P;tot+=it;
+  const rows=Array.from({length:k},(_,j)=>({P:j===0?first:base,it:0}));
+  let tail=0,p1=0,p2=0,d1=0,d2=0;
+  if(z>=k){}
+  else if(k===1){if(cash){d1=dd(tx,dueAt(c,f.from));p1=Math.round(A*rate/36500*d1);rows[0].it=p1}}
+  else{
+    const Pd=[];for(let j=1;j<k;j++)Pd.push(dueAt(c,f.from+j));
+    const o=revolve(c,{A,tx,P0:dueAt(c,f.from),pay:first,kk:k-1,rate,Pd});
+    o.rows.forEach((r,j)=>{rows[j+1].it=(j+1<z)?0:r.it});
+    tail=o.tail;p1=o.p1;p2=o.p2;d1=o.d1;d2=o.d2;
   }
-  return {rows,interest:tot,k,z};
+  const tot=rows.reduce((t,r)=>t+r.it,0)+tail;
+  return {rows,tail,interest:tot,k,z,p1,p2,d1,d2};
 }
 function interestOf(f){
   if(f.iu==='card'){const p=cardPlan(f);return p?p.interest:0}
@@ -557,6 +587,8 @@ function planAdd(f){
   if(cp){
     const o={};
     cp.rows.forEach((r,i)=>{const mi=f.from+i;o[mi]=(f.over&&f.over[mi]!==undefined)?f.over[mi]:r.P+r.it});
+    const tm=f.to+1;
+    if(cp.tail>0&&tm<MONTHS.length)o[tm]=(f.over&&f.over[tm]!==undefined)?f.over[tm]:cp.tail;
     return o;
   }
   const T=A+interestOf(f),base=Math.floor(T/k),first=base+T-base*k,out={};
@@ -621,7 +653,7 @@ function colOptions(sel){
 }
 function openAdd(colId,blank){
   const fc=cardsOf()[0]||COLS[0],col=colId||(fc&&fc.id)||'',from=suggestFrom(col),cc=COLS.find(x=>x.id===col);
-  s.form={kind:'add',name:'',amt:0,col,from,to:Math.min(MONTHS.length-1,from+2),int:0,iu:cc&&cc.card?'card':'yr',zero:false,zm:0,over:{}};
+  s.form={kind:'add',tx:fmtD(TODAY),name:'',amt:0,col,from,to:Math.min(MONTHS.length-1,from+2),int:0,iu:cc&&cc.card?'card':'yr',zero:false,zm:0,over:{}};
   const f=s.form;
   mountSheet('<h3>ลงรายการใหม่</h3>'
    +'<div class="two"><div class="field"><label for="f-name">รายการ</label><input id="f-name" placeholder="เช่น จองโรงแรม, ยืมเพื่อน" value="'+esc(f.name)+'"></div>'
@@ -630,6 +662,7 @@ function openAdd(colId,blank){
    +'<div class="hint" id="f-hint"></div>'
    +'<div class="two"><div class="field" id="f-intw"><label for="f-int">ดอกเบี้ยที่อาจเกิด</label><input id="f-int" inputmode="decimal" class="num" value="0"></div>'
    +'<div class="field"><label for="f-iu">วิธีคิดดอกเบี้ย</label><select id="f-iu"><option value="card">ตามบัตร (คิดจริงแบบบริษัทบัตร)</option><option value="yr">% ต่อปี (ลดต้นลดดอก)</option><option value="pct">% ต่อเดือน (flat)</option><option value="baht">บาท ทั้งหมด</option></select></div></div>'
+   +'<div class="field" id="f-txw" style="display:none"><label for="f-tx">วันที่รูดบัตร (ใช้คิดดอกเบี้ยรายวัน)</label><input id="f-tx" type="date" value="'+f.tx+'"></div>'
    +'<div class="zrow" id="f-zw" style="display:none"><label class="chk"><input type="checkbox" id="f-z"> ผ่อนดอกเบี้ย 0%</label><span id="f-zmw" style="display:none">กี่เดือน <input id="f-zm" class="num" inputmode="numeric" style="width:70px" placeholder="ทั้งหมด"></span></div>'
    +'<div class="hint" id="f-ihint"></div>'
    +'<div class="two"><div class="field"><label for="f-from">ผ่อนตั้งแต่ (แถวในตาราง)</label><select id="f-from">'+monthOptions(f.from)+'</select></div>'
@@ -641,12 +674,22 @@ function openAdd(colId,blank){
   refreshForm();
 }
 function splCalc(){
-  const q=s.sp,A=cell(q.col,q.mi),pay=Math.min(A,Math.max(0,q.pay)),R=A-pay;
-  const maxK=Math.max(1,Math.min(6,MONTHS.length-1-q.mi)),k=Math.min(maxK,Math.max(1,q.k));
+  const q=s.sp,c=COLS.find(x=>x.id===q.col),A=cell(q.col,q.mi),pay=Math.min(A,Math.max(0,q.pay)),R=A-pay;
+  const maxK=Math.max(1,Math.min(6,MONTHS.length-2-q.mi)),k=Math.min(maxK,Math.max(1,q.k));
+  const out={};out[q.mi]=-R;
+  if(c&&c.card&&R>0){
+    const tx=parseD(q.tx)||TODAY,P0=parseD(q.pd)||dueAt(c,q.mi),Pd=[];
+    for(let j=1;j<=k;j++)Pd.push(dueAt(c,q.mi+j));
+    const o=revolve(c,{A,tx,P0,pay,kk:k,rate:q.rate||0,Pd});
+    o.rows.forEach((r,j)=>{out[q.mi+j+1]=r.P+r.it});
+    const tm=q.mi+k+1;if(o.tail>0&&tm<MONTHS.length)out[tm]=o.tail;
+    const intr=o.rows.reduce((t,r)=>t+r.it,0)+o.tail;
+    return {A,pay,R,k,maxK,intr,T:R+intr,out,card:true,p1:o.p1,p2:o.p2,d1:o.d1,d2:o.d2,tail:o.tail};
+  }
   const i=(q.rate||0)/1200;
   const intr=R<=0||!i?0:Math.round((k===1?R*i:(R*i/(1-Math.pow(1+i,-k)))*k-R));
-  const T=R+intr,base=Math.floor(T/k),first=base+T-base*k,out={};
-  out[q.mi]=-R;for(let j=1;j<=k;j++)out[q.mi+j]=j===1?first:base;
+  const T=R+intr,base=Math.floor(T/k),first=base+T-base*k;
+  for(let j=1;j<=k;j++)out[q.mi+j]=j===1?first:base;
   return {A,pay,R,k,maxK,intr,T,out};
 }
 function splPv(){
@@ -656,7 +699,8 @@ function splPv(){
     return '<div class="pv-r"><span>'+lab(i)+'</span><span class="num">฿'+fmt(cell(q.col,i)+c.out[i])+'</span><span class="'+afterCls(after)+'">'+(after<0?'-':'')+fmt(Math.abs(after))+'</span></div>';
   }).join('');
   const bad=Object.keys(c.out).map(Number).filter(i=>i!==q.mi&&remaining(i)-c.out[i]<0).length;
-  return '<div class="check info">ยกไป ฿'+fmt(c.R)+' · ดอกเบี้ยประมาณ ฿'+fmt(c.intr)+' (คิดคร่าวๆ จากยอดคงเหลือ ผ่อนเท่ากันทุกเดือน) · รวมที่ต้องจ่ายเพิ่ม ฿'+fmt(c.T)+'</div>'
+  return '<div class="check info">ยกไป ฿'+fmt(c.R)+' · ดอกเบี้ยประมาณ ฿'+fmt(c.intr)+(c.card?' (คิดรายวันแบบบริษัทบัตร)':' (คิดคร่าวๆ จากยอดคงเหลือ ผ่อนเท่ากันทุกเดือน)')+' · รวมที่ต้องจ่ายเพิ่ม ฿'+fmt(c.T)+'</div>'
+   +(c.card?'<div class="note" style="margin:0">ดอกเบี้ยบิลถัดไป = ส่วนที่ 1 ฿'+fmt(c.p1)+' (ยอดเต็ม ฿'+fmt(c.A)+' × '+c.d1+' วัน จากวันที่รูดถึงวันจ่าย) + ส่วนที่ 2 ฿'+fmt(c.p2)+' (ยอดค้าง ฿'+fmt(c.R)+' × '+c.d2+' วัน จากวันจ่ายถึงวันสรุปยอด)'+(c.tail>0?' · ดอกที่ตกค้างหลังงวดสุดท้าย ฿'+fmt(c.tail):'')+'</div>':'')
    +'<div class="pv"><div class="pv-h"><span>รอบ</span><span>ยอดหลังแบ่ง</span><span>คงเหลือ</span></div>'+rows+'</div>'
    +(bad?'<div class="check bad">มี '+bad+' รอบที่เงินไม่พอ</div>':'<div class="check ok">ทุกรอบที่เกี่ยวข้องยังเหลือเงิน</div>');
 }
@@ -670,10 +714,13 @@ function openSpl(colId,mi){
   const A=cell(colId,mi);
   if(A<=0){toast('ยังไม่มียอดให้แบ่ง');return}
   const rt0=c.card?cardRate(c):16;
-  s.sp={col:colId,mi,pay:0,k:1,rate:rt0};
+  let tx0=TODAY,pd0=TODAY;
+  if(c.card){const P0=dueAt(c,mi),S0=cutBefore(c,P0),S_1=cutBefore(c,S0);pd0=P0;tx0=new Date(S_1.getFullYear(),S_1.getMonth(),S_1.getDate()+Math.round(dd(S_1,S0)/2))}
+  s.sp={col:colId,mi,pay:0,k:1,rate:rt0,tx:fmtD(tx0),pd:fmtD(pd0)};
   mountSheet('<h3>แบ่งจ่าย '+esc(c.name)+'</h3><p class="note" style="margin:0">ยอดรอบ '+labFull(mi)+' ฿'+fmt(A)+' · ยอดที่ไม่จ่ายตอนนี้จะยกไปเดือนถัดไป</p>'
    +'<div class="two"><div class="field"><label for="sp-pay">จ่ายรอบนี้ (บาท)</label><input id="sp-pay" class="num" inputmode="numeric" value="0"></div>'
    +'<div class="field"><label for="sp-rate">ดอกเบี้ย % ต่อปี</label><input id="sp-rate" class="num" inputmode="decimal" value="'+rt0+'"></div></div>'
+   +(c.card?'<div class="two"><div class="field"><label for="sp-tx">วันที่รูด (โดยประมาณ)</label><input id="sp-tx" type="date" value="'+s.sp.tx+'"></div><div class="field"><label for="sp-pd">วันที่จ่ายรอบนี้</label><input id="sp-pd" type="date" value="'+s.sp.pd+'"></div></div><p class="note" style="margin:0">ถ้าบิลนี้มีหลายรายการ ใส่วันที่รูดเฉลี่ยคร่าวๆ ได้ (ตั้งต้นไว้กลางรอบ)</p>':'')
    +'<label>ยกไปกี่เดือน: <b id="sp-kv" class="num">1</b><input id="sp-k" type="range" min="1" max="'+splCalc().maxK+'" value="1"></label>'
    +'<div id="sp-pv">'+splPv()+'</div>'
    +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="splok" style="flex:1">ยืนยันแบ่งจ่าย</button></div>');
@@ -703,6 +750,7 @@ function syncAddUi(){
   if(!isC&&f.iu==='card'){f.iu='yr';iu.value='yr'}
   const on=isC&&f.iu==='card';
   document.getElementById('f-zw').style.display=on?'flex':'none';
+  document.getElementById('f-txw').style.display=on?'':'none';
   document.getElementById('f-zmw').style.display=f.zero?'inline':'none';
   document.getElementById('f-intw').style.display=on?'none':'';
 }
@@ -717,7 +765,7 @@ function refreshForm(){
     if(ih){
       if(f.iu==='card'&&c.card){
         const cash=cardType(c)==='cash',kk=f.to-f.from+1,cp=cardPlan(f);
-        ih.textContent=(cash?'บัตรเงินสด':'บัตรเครดิต')+' ดอกเบี้ย '+cardRate(c)+'%/ปี · '+(f.zero?'ผ่อน 0% '+(cp?cp.z:0)+' เดือน':cash?'คิดดอกตั้งแต่วันที่รูด':kk===1?'จ่ายเต็มภายในรอบ ไม่คิดดอก':'ผ่อนเกิน 1 เดือน คิดดอกจากยอดคงเหลือ')+' · ดอกเบี้ยรวมประมาณ ฿'+fmt(interestOf(f))+' (แก้ยอดแต่ละเดือนได้ในตาราง)';
+        ih.textContent=(cash?'บัตรเงินสด':'บัตรเครดิต')+' ดอกเบี้ย '+cardRate(c)+'%/ปี คิดรายวัน · '+(f.zero&&cp&&cp.z>=kk?'ผ่อน 0% ตลอดช่วง ไม่มีดอกเบี้ย':f.zero?'ผ่อน 0% '+(cp?cp.z:0)+' เดือนแรก':kk===1?(cash?'คิดดอกตั้งแต่วันที่รูดถึงวันจ่าย':'จ่ายเต็มภายในรอบ ไม่คิดดอก'):'จ่ายไม่เต็มรอบ จึงคิดดอกจากยอดเต็มตั้งแต่วันที่รูด'+(cp?' (ส่วนที่ 1 ฿'+fmt(cp.p1)+' + ส่วนที่ 2 ฿'+fmt(cp.p2)+' + ดอกต่อเนื่องงวดถัดไป)':''))+' · ดอกเบี้ยรวมประมาณ ฿'+fmt(interestOf(f))+(cp&&cp.tail>0?' (รวมดอกที่ตกค้างเดือนหลังงวดสุดท้าย ฿'+fmt(cp.tail)+')':'');
       }else ih.textContent='ดอกเบี้ยรวมประมาณ ฿'+fmt(interestOf(f))+(f.iu==='yr'?' (คิดจากยอดคงเหลือ ผ่อนเท่ากันทุกเดือน)':f.iu==='pct'?' (คิดแบบคงที่จากยอดต้น)':'');
     }
     paintDerived();
@@ -740,7 +788,7 @@ function readForm(e){
   f.amt=parseInt(g('f-amt').value.replace(/\D/g,''),10)||0;
   f.int=parseFloat(g('f-int').value)||0;
   f.iu=g('f-iu').value;
-  f.zero=g('f-z').checked;f.zm=parseInt(g('f-zm').value,10)||0;
+  f.zero=g('f-z').checked;f.zm=parseInt(g('f-zm').value,10)||0;f.tx=g('f-tx').value||fmtD(TODAY);
   if(id==='f-name')return;
   f.over={};
   if(id==='f-col'){
@@ -1128,6 +1176,8 @@ function onField(e){
   if(id.indexOf('sp-')===0&&s.sp){
     if(id==='sp-pay')s.sp.pay=parseInt(e.target.value.replace(/\D/g,''),10)||0;
     if(id==='sp-rate')s.sp.rate=Math.max(0,parseFloat(e.target.value)||0);
+    if(id==='sp-tx')s.sp.tx=e.target.value||s.sp.tx;
+    if(id==='sp-pd')s.sp.pd=e.target.value||s.sp.pd;
     if(id==='sp-k'){s.sp.k=+e.target.value;document.getElementById('sp-kv').textContent=s.sp.k}
     const pv=document.getElementById('sp-pv');if(pv)pv.innerHTML=splPv();
     return;
@@ -1150,11 +1200,11 @@ function onField(e){
   if(id==='hol-in'){s.hol=e.target.value.split(/\s+/).map(x=>x.trim()).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));setHol(s.hol);queueSave();return}
   if(id==='nc-type'){const v=e.target.value,on=v!=='other';document.getElementById('nc-cutw').style.display=on?'':'none';document.getElementById('nc-ratew').style.display=on?'':'none';if(on)document.getElementById('nc-rate').value=v==='cash'?25:16;return}
   if(id==='ec-type'){document.getElementById('ec-rate').value=e.target.value==='cash'?25:16;return}
-  if(['f-name','f-amt','f-col','f-from','f-to','f-int','f-iu','f-z','f-zm','k'].includes(id)||id.indexOf('pv-in-')===0)readForm(e);
+  if(['f-name','f-amt','f-col','f-from','f-to','f-int','f-iu','f-z','f-zm','f-tx','k'].includes(id)||id.indexOf('pv-in-')===0)readForm(e);
 }
 document.addEventListener('input',onField);
 document.addEventListener('change',e=>{if(e.target.id==='imp-file'&&e.target.files[0]){importFile(e.target.files[0]);e.target.value='';return}
-  if(['f-col','f-from','f-to','f-iu','f-z','nc-type','ec-type'].includes(e.target.id))onField(e)});
+  if(['f-col','f-from','f-to','f-iu','f-z','f-tx','sp-tx','sp-pd','nc-type','ec-type'].includes(e.target.id))onField(e)});
 boot();
 </script>
 </body>
