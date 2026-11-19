@@ -235,6 +235,7 @@ table.grid{border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:
 .acct.s-loading .dotc,.acct.s-checking .dotc{background:var(--accent)}
 .acct.s-out .dotc,.acct.s-slow .dotc{background:var(--warn)}
 .acct.s-error .dotc{background:var(--bad)}
+.acct.s-conflict .dotc{background:var(--warn)}
 .gate{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
 .gate .box{width:100%;max-width:420px;background:var(--surface);border-radius:28px;box-shadow:var(--shadow);padding:28px 22px;display:flex;flex-direction:column;gap:14px;text-align:center}
 .gate .logo{width:76px;height:76px;margin:0 auto;filter:drop-shadow(0 8px 16px rgba(47,107,255,.25))}
@@ -1271,14 +1272,22 @@ const CFG=window.APP_CONFIG||{};
 const LS_KEY='debt-planner:v2',LS_DEMO='debt-planner:local-ok';
 const sb=(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&window.supabase)?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
 const acct={status:'checking',name:'',email:'',time:null,err:''};
-const sync={uid:null,last:'',t:null,saving:false,chan:null};
+const sync={uid:null,t:null,busy:false,lh:'',cloud:null};
+const LS_META='debt-planner:meta';
+let meta={at:null,base:null,synced:null,auto:false,conflict:false,uid:null};
+try{Object.assign(meta,JSON.parse(localStorage.getItem(LS_META)||'{}'))}catch(_){}
+const saveMeta=()=>{try{localStorage.setItem(LS_META,JSON.stringify(meta))}catch(_){}};
 const canon=o=>{if(Array.isArray(o))return '['+o.map(canon).join(',')+']';if(o&&typeof o==='object')return '{'+Object.keys(o).sort().map(k=>JSON.stringify(k)+':'+canon(o[k])).join(',')+'}';return JSON.stringify(o)};
+const hashOf=o=>{const t=canon(o);let x=5381;for(let i=0;i<t.length;i++)x=((x<<5)+x+t.charCodeAt(i))|0;return x+':'+t.length};
+const fmtDT=v=>{const d=new Date(v);return isNaN(d)?'':d.getDate()+' '+MS[d.getMonth()]+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+' น.'};
 function chipHtml(){
   const st=acct.status;
-  const map={checking:'กำลังตรวจสอบ…',local:'บันทึกในเครื่องนี้',out:'ยังไม่ได้เข้าสู่ระบบ',loading:'กำลังโหลดข้อมูล…',slow:'เชื่อมต่อช้า',saving:'กำลังบันทึก…',synced:'ซิงก์แล้ว',error:'บันทึกไม่ได้'};
+  const map={checking:'กำลังตรวจสอบ…',local:'บันทึกในเครื่องนี้',out:'ยังไม่ได้เข้าสู่ระบบ',loading:'กำลังโหลดข้อมูล…',slow:'เชื่อมต่อช้า',saving:'กำลังบันทึก…',synced:'ซิงก์แล้ว',error:'ซิงก์ไม่สำเร็จ',conflict:'ข้อมูลสองฝั่งต่างกัน แตะเพื่อเลือก'};
   const ini=acct.name?Array.from(acct.name)[0].toUpperCase():'';
   const lead=(st==='synced'||st==='saving')&&ini?'<span class="ini">'+esc(ini)+'</span>':'<i class="dotc"></i>';
-  const text=(st==='synced'&&acct.name)?esc(acct.name)+' · ซิงก์แล้ว':map[st];
+  let text=map[st];
+  if(st==='local')text=sb?'ในเครื่องนี้ · แตะเพื่อซิงก์':'บันทึกในเครื่องนี้';
+  else if(st==='synced'&&sync.uid){const dirty=meta.base&&hashOf(persist())!==meta.base;text=esc(acct.name||'บัญชี')+' · '+(meta.synced?(dirty?'มีส่วนที่ยังไม่ซิงก์':'ซิงก์ '+fmtDT(meta.synced)):'ยังไม่ซิงก์')}
   return '<button class="acct s-'+st+'" id="acct" data-act="acct" aria-label="บัญชีและการซิงก์">'+lead+'<span class="t">'+text+'</span></button>';
 }
 function paintChip(){const el=document.getElementById('acct');if(el)el.outerHTML=chipHtml()}
@@ -1296,46 +1305,80 @@ function applyData(d){
   s.mi=cur();
   return true;
 }
-function queueSave(){clearTimeout(sync.t);sync.t=setTimeout(flush,900)}
-async function flush(){
-  if(sync.saving)return;
-  const obj=persist(),c=canon(obj);
-  if(c===sync.last)return;
-  if(!sync.uid){
-    try{localStorage.setItem(LS_KEY,JSON.stringify(obj));sync.last=c}catch(_){}
-    return;
-  }
-  sync.saving=true;setAcct('saving');
-  const {error}=await sb.from('plans').upsert({user_id:sync.uid,data:obj,updated_at:new Date().toISOString()});
-  if(error){setAcct('error',error.message||'')}
-  else{sync.last=c;acct.time=new Date();setAcct('synced')}
-  sync.saving=false;
-  if(!error&&canon(persist())!==sync.last)queueSave();
+function saveLocal(){
+  const obj=persist(),k=hashOf(obj);
+  try{localStorage.setItem(LS_KEY,JSON.stringify(obj))}catch(_){}
+  if(k!==sync.lh){sync.lh=k;meta.at=new Date().toISOString();saveMeta();if(sync.uid)paintChip()}
 }
-async function pull(){
-  if(!sync.uid||sync.saving)return;
-  const {data,error}=await sb.from('plans').select('data').eq('user_id',sync.uid).maybeSingle();
-  if(error){setAcct('error',error.message||'');return}
-  if(data&&data.data){
-    const c=canon(data.data);
-    if(c!==sync.last&&canon(persist())===sync.last){
-      if(applyData(data.data)){sync.last=canon(persist());render()}
+function queueSave(){clearTimeout(sync.t);sync.t=setTimeout(saveLocal,400)}
+function markSynced(base){meta.base=base;meta.synced=new Date().toISOString();meta.conflict=false;meta.uid=sync.uid;saveMeta()}
+async function pushNow(obj){
+  const {error}=await sb.from('plans').upsert({user_id:sync.uid,data:obj,updated_at:new Date().toISOString()});
+  if(error)throw error;
+  markSynced(hashOf(obj));
+}
+function pullApply(d){
+  try{localStorage.setItem(LS_KEY+':bak',localStorage.getItem(LS_KEY)||'')}catch(_){}
+  if(!applyData(d))throw new Error('ข้อมูลบนคลาวด์อ่านไม่ได้');
+  sync.lh='';saveLocal();render();
+  markSynced(hashOf(persist()));
+}
+async function smartSync(silent){
+  if(!sb||!sync.uid||sync.busy)return;
+  sync.busy=true;setAcct('saving');
+  let msg='';
+  try{
+    const {data,error}=await sb.from('plans').select('data,updated_at').eq('user_id',sync.uid).maybeSingle();
+    if(error)throw error;
+    const obj=persist(),L=hashOf(obj);
+    if(!data||!data.data){await pushNow(obj);msg='ส่งข้อมูลขึ้นคลาวด์แล้ว'}
+    else{
+      const C=hashOf(data.data);
+      if(C===L){markSynced(L);msg='ข้อมูลตรงกันอยู่แล้ว'}
+      else if(meta.base&&C===meta.base){await pushNow(obj);msg='ส่งการแก้ไขขึ้นคลาวด์แล้ว'}
+      else if(meta.base&&L===meta.base){pullApply(data.data);msg='ดึงข้อมูลล่าสุดจากคลาวด์แล้ว'}
+      else{sync.cloud=data;meta.conflict=true;saveMeta();sync.busy=false;setAcct('conflict');if(!silent)openConflict();return}
     }
-    acct.time=new Date();setAcct('synced');
-  }
+  }catch(e){sync.busy=false;setAcct('error',(e&&e.message)||'');return}
+  sync.busy=false;setAcct('synced');if(!silent)toast(msg);
+}
+function autoDue(){
+  if(!meta.auto||!sync.uid||sync.busy)return;
+  const last=meta.synced?Date.parse(meta.synced):0;
+  if(Date.now()-last>20*3600*1000)smartSync(true);
+}
+function openConflict(){
+  const c=sync.cloud;if(!c)return;
+  const cnt=d=>(d.entries||[]).length;
+  mountSheet('<h3>เลือกข้อมูลที่จะเก็บไว้</h3><p class="note" style="margin:0">ข้อมูลในเครื่องนี้กับบนคลาวด์ไม่เหมือนกัน แอพไม่รวมให้เอง เลือกชุดที่ต้องการ อีกชุดจะถูกเขียนทับ</p>'
+   +'<div class="card" style="box-shadow:none"><b>ในเครื่องนี้</b><small style="display:block;color:var(--muted)">แก้ไขล่าสุด '+(meta.at?fmtDT(meta.at):'-')+' · รายการที่ลงเพิ่ม '+cnt(persist())+'</small></div>'
+   +'<div class="card" style="box-shadow:none"><b>บนคลาวด์</b><small style="display:block;color:var(--muted)">อัปเดตล่าสุด '+fmtDT(c.updated_at)+' · รายการที่ลงเพิ่ม '+cnt(c.data)+'</small></div>'
+   +'<button class="btn" data-act="pickl">ใช้ชุดในเครื่องนี้ (เขียนทับคลาวด์)</button>'
+   +'<button class="btn ghost" data-act="pickc">ใช้ชุดจากคลาวด์ (เขียนทับในเครื่องนี้)</button>'
+   +'<button class="btn ghost" data-act="export">ส่งออกไฟล์สำรองของเครื่องนี้ก่อน</button>'
+   +'<button class="btn ghost" data-act="close">ไว้ทีหลัง</button>');
+}
+async function pickConflict(local){
+  sync.busy=true;setAcct('saving');
+  try{if(local)await pushNow(persist());else pullApply(sync.cloud.data)}
+  catch(e){sync.busy=false;setAcct('error',(e&&e.message)||'');return}
+  sync.busy=false;closeSheet(true);setAcct('synced');toast(local?'เขียนทับคลาวด์ด้วยข้อมูลในเครื่องแล้ว':'ใช้ข้อมูลจากคลาวด์แล้ว');
 }
 function acctInner(){
   const st=acct.status;
-  const tm=acct.time?String(acct.time.getHours()).padStart(2,'0')+':'+String(acct.time.getMinutes()).padStart(2,'0'):'';
   if(!sb)return '<p class="note" style="margin:0">ตอนนี้ข้อมูลบันทึกในเบราว์เซอร์เครื่องนี้เท่านั้น ถ้าอยากใช้หลายเครื่อง ให้ตั้งค่า Supabase ตามขั้นตอนในไฟล์ README แล้วใส่ค่าในไฟล์ config.js</p>'
     +'<button class="btn ghost" data-act="export">ส่งออกข้อมูลสำรอง</button>';
   if(!sync.uid){
-    return '<p class="note" style="margin:0">เข้าสู่ระบบเพื่อบันทึกข้อมูลบนคลาวด์และใช้ได้ทุกเครื่อง</p><button class="btn" data-act="showgate">เข้าสู่ระบบ</button>';
+    return '<p class="note" style="margin:0">ตอนนี้ข้อมูลเก็บในเครื่องนี้ ใช้งานได้เต็มที่โดยไม่ต้องล็อกอิน เมื่ออยากใช้หลายเครื่อง ค่อยเข้าสู่ระบบแล้วกดซิงก์</p><button class="btn" data-act="showgate">เข้าสู่ระบบเพื่อซิงก์</button><button class="btn ghost" data-act="export">ส่งออกข้อมูลสำรอง</button>';
   }
-  const msg=st==='error'?'บันทึกไม่ได้: '+esc(acct.err||'ลองใหม่อีกครั้ง'):st==='slow'?'เชื่อมต่อช้า ข้อมูลอาจไม่ล่าสุด':st==='saving'?'กำลังบันทึก…':st==='loading'?'กำลังโหลด…':'ซิงก์แล้ว'+(tm?' ล่าสุด '+tm+' น.':'');
+  const dirty=meta.base&&hashOf(persist())!==meta.base;
+  const msg=st==='error'?'ซิงก์ไม่สำเร็จ: '+esc(acct.err||'ลองใหม่อีกครั้ง'):st==='saving'?'กำลังซิงก์…':st==='conflict'?'ข้อมูลสองฝั่งต่างกัน ต้องเลือกชุดที่จะเก็บ':(meta.synced?'ซิงก์ล่าสุด '+fmtDT(meta.synced)+(dirty?' · มีส่วนที่ยังไม่ซิงก์':''):'ยังไม่เคยซิงก์');
   return '<div class="cc-top"><div class="av" style="background:linear-gradient(135deg,#00c2a8,#2f6bff)">'+esc(acct.name?Array.from(acct.name)[0].toUpperCase():'?')+'</div><div style="flex:1;min-width:0"><b>'+esc(acct.name||acct.email||'บัญชีของคุณ')+'</b><small style="display:block;color:var(--muted);overflow-wrap:anywhere">'+esc(acct.email)+'</small><small style="display:block;color:var(--muted)">'+msg+'</small></div></div>'
-    +'<p class="note" style="margin:0">ข้อมูลเก็บแยกเฉพาะบัญชีนี้ เปิดบนเครื่องอื่นด้วยบัญชีเดียวกันจะเห็นข้อมูลชุดเดียวกัน</p>'
-    +'<div class="cc-act" style="margin:0"><button class="btn ghost sm" data-act="syncnow">ซิงก์ตอนนี้</button><button class="btn ghost sm" data-act="signout" style="color:var(--bad)">ออกจากระบบ</button></div>';
+    +(st==='conflict'?'<button class="btn" data-act="resolve">เลือกข้อมูลที่จะเก็บ</button>':'')
+    +'<button class="btn" data-act="syncnow">ซิงก์ตอนนี้</button>'
+    +'<label class="chk"><input type="checkbox" id="auto-sync"'+(meta.auto?' checked':'')+'> ซิงก์อัตโนมัติวันละครั้ง เมื่อเปิดแอพ</label>'
+    +'<p class="note" style="margin:0">ข้อมูลถูกเก็บในเครื่องเสมอ ซิงก์คือการส่งหรือดึงข้อมูลกับคลาวด์ กดตอนไหนก็ได้ แม้ไม่มีข้อมูลใหม่</p>'
+    +'<div class="cc-act" style="margin:0"><button class="btn ghost sm" data-act="export">ส่งออกข้อมูลสำรอง</button><button class="btn ghost sm" data-act="signout" style="color:var(--bad)">ออกจากระบบ</button></div>';
 }
 function openAcct(){
   mountSheet('<h3>บัญชีและการซิงก์</h3><div id="acct-body" style="display:flex;flex-direction:column;gap:12px">'+acctInner()+'</div><button class="btn ghost" data-act="close">ปิด</button>');
@@ -1352,7 +1395,7 @@ function showGate(){
    +'<button class="btn ghost" data-act="pup">สมัครใช้งานครั้งแรก (ตั้งรหัสผ่านนี้)</button>'
    +'<button class="btn ghost" data-act="mlink" style="font-size:13px">หรือส่งลิงก์เข้าสู่ระบบทางอีเมลแทน</button>'
    +'<p id="g-msg" style="min-height:1.4em"></p>'
-   +'<button class="btn ghost" data-act="demo">ใช้แบบไม่ล็อกอิน (บันทึกในเครื่องนี้)</button></div>';
+   +'<button class="btn ghost" data-act="demo">ปิด ใช้ในเครื่องนี้ต่อ</button></div>';
   document.body.appendChild(g);
 }
 function hideGate(){const g=document.getElementById('gate');if(g)g.remove()}
@@ -1377,40 +1420,28 @@ async function mlink(){
   const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:redirectUrl()}});
   if(m)m.textContent=error?'ส่งไม่สำเร็จ: '+authErr(error.message||''):'ส่งลิงก์ไปที่ '+email+' แล้ว เปิดอีเมลแล้วกดลิงก์ได้เลย';
 }
-async function enterCloud(session){
-  if(sync.uid===session.user.id)return;
+function signedIn(session,restore){
   const u=session.user,md=u.user_metadata||{};
   sync.uid=u.id;acct.name=md.full_name||md.name||(u.email||'').split('@')[0];acct.email=u.email||'';
-  hideGate();setAcct('loading');
-  const timer=setTimeout(()=>{if(acct.status==='loading')setAcct('slow')},10000);
-  const {data,error}=await sb.from('plans').select('data').eq('user_id',u.id).maybeSingle();
-  clearTimeout(timer);
-  if(error){setAcct('error',error.message||'');return}
-  if(data&&data.data&&applyData(data.data)){sync.last=canon(persist());render();acct.time=new Date();setAcct('synced')}
-  else{sync.last='';await flush();render()}
-  if(sync.chan){try{sb.removeChannel(sync.chan)}catch(_){}}
-  sync.chan=sb.channel('plan-'+u.id).on('postgres_changes',{event:'*',schema:'public',table:'plans',filter:'user_id=eq.'+u.id},p=>{
-    const d=p.new&&p.new.data;
-    if(d&&canon(d)!==sync.last&&!sync.saving&&canon(persist())===sync.last){if(applyData(d)){sync.last=canon(persist());render();acct.time=new Date();setAcct('synced')}}
-  }).subscribe();
-}
-function leaveCloud(){
-  sync.uid=null;sync.last='';
-  if(sync.chan){try{sb.removeChannel(sync.chan)}catch(_){}sync.chan=null}
-  acct.name='';acct.email='';setAcct('out');
+  hideGate();
+  if(meta.uid&&meta.uid!==u.id){meta.base=null;meta.synced=null;meta.conflict=false}
+  meta.uid=u.id;saveMeta();
+  setAcct(meta.conflict?'conflict':'synced');
+  if(restore)autoDue();else smartSync(false);
 }
 async function boot(){
-  try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);if(applyData(d)){sync.last=canon(persist())}}}catch(_){}
+  try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);applyData(d)}}catch(_){}
+  sync.lh=hashOf(persist());
   render();
   if(!sb){setAcct('local');return}
+  setAcct('local');
   const {data}=await sb.auth.getSession();
-  if(data&&data.session)await enterCloud(data.session);
-  else{setAcct('out');let ok=false;try{ok=localStorage.getItem(LS_DEMO)==='1'}catch(_){}if(!ok)showGate()}
+  if(data&&data.session)signedIn(data.session,true);
   sb.auth.onAuthStateChange((ev,session)=>{
-    if(ev==='SIGNED_IN'&&session)enterCloud(session);
-    if(ev==='SIGNED_OUT'){leaveCloud();showGate()}
+    if(ev==='SIGNED_IN'&&session&&sync.uid!==session.user.id)signedIn(session,false);
+    if(ev==='SIGNED_OUT'){sync.uid=null;acct.name='';acct.email='';setAcct('local')}
   });
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pull()});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoDue()});
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(persist(),null,2)],{type:'application/json'});
@@ -1468,7 +1499,10 @@ document.addEventListener('click',e=>{
   else if(a==='reset'){if(!s.resetArm){s.resetArm=true;render();return}closeSheet(true);s=initial();s.mi=cur();render();toast('ล้างข้อมูลแล้ว')}
   else if(a==='salrange'){const amt=parseInt(document.getElementById('sr-amt').value.replace(/\D/g,''),10)||0;let f=+document.getElementById('sr-from').value,t=+document.getElementById('sr-to').value;if(t<f){const x=f;f=t;t=x}for(let i=f;i<=t;i++)s.sal[i]=amt;render();toast('ตั้งเงินเดือน ฿'+fmt(amt)+' ตั้งแต่ '+lab(f)+' ถึง '+lab(t)+' แล้ว')}
   else if(a==='acct')openAcct();
-  else if(a==='syncnow'){sync.last='';flush().then(pull)}
+  else if(a==='syncnow')smartSync(false);
+  else if(a==='resolve')openConflict();
+  else if(a==='pickl')pickConflict(true);
+  else if(a==='pickc')pickConflict(false);
   else if(a==='signout'){closeSheet(true);sb.auth.signOut()}
   else if(a==='showgate'){closeSheet(true);showGate()}
   else if(a==='gsign')gsign();
@@ -1477,7 +1511,7 @@ document.addEventListener('click',e=>{
   else if(a==='pup')psign(true);
   else if(a==='export')exportData();
   else if(a==='import'){const f=document.getElementById('imp-file');if(f)f.click()}
-  else if(a==='demo'){try{localStorage.setItem(LS_DEMO,'1')}catch(_){}hideGate()}
+  else if(a==='demo')hideGate();
 });
 /* swipe right on a bill to tick it as paid */
 let drag=null;
@@ -1532,6 +1566,7 @@ function onField(e){
     document.getElementById('dt-total').textContent='฿'+fmt(cell(s.detail.col,s.detail.mi));
     return;
   }
+  if(id==='auto-sync'){meta.auto=e.target.checked;saveMeta();if(meta.auto)autoDue();return}
   if(id.indexOf('salg-')===0){const v=parseInt(e.target.value.replace(/\D/g,''),10)||0;for(let i=+e.target.dataset.a;i<=+e.target.dataset.b;i++)s.sal[i]=v;queueSave();return}
   if(id.indexOf('sal-')===0||id.indexOf('car-')===0){
     const i=+e.target.dataset.i,v=parseInt(e.target.value.replace(/\D/g,''),10)||0;
