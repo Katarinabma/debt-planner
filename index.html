@@ -1376,9 +1376,32 @@ function acctInner(){
   return '<div class="cc-top"><div class="av" style="background:linear-gradient(135deg,#00c2a8,#2f6bff)">'+esc(acct.name?Array.from(acct.name)[0].toUpperCase():'?')+'</div><div style="flex:1;min-width:0"><b>'+esc(acct.name||acct.email||'บัญชีของคุณ')+'</b><small style="display:block;color:var(--muted);overflow-wrap:anywhere">'+esc(acct.email)+'</small><small style="display:block;color:var(--muted)">'+msg+'</small></div></div>'
     +(st==='conflict'?'<button class="btn" data-act="resolve">เลือกข้อมูลที่จะเก็บ</button>':'')
     +'<button class="btn" data-act="syncnow">ซิงก์ตอนนี้</button>'
+    +'<button class="btn ghost" data-act="chpw">ตั้ง / เปลี่ยนรหัสผ่าน</button>'
     +'<label class="chk"><input type="checkbox" id="auto-sync"'+(meta.auto?' checked':'')+'> ซิงก์อัตโนมัติวันละครั้ง เมื่อเปิดแอพ</label>'
     +'<p class="note" style="margin:0">ข้อมูลถูกเก็บในเครื่องเสมอ ซิงก์คือการส่งหรือดึงข้อมูลกับคลาวด์ กดตอนไหนก็ได้ แม้ไม่มีข้อมูลใหม่</p>'
     +'<div class="cc-act" style="margin:0"><button class="btn ghost sm" data-act="export">ส่งออกข้อมูลสำรอง</button><button class="btn ghost sm" data-act="signout" style="color:var(--bad)">ออกจากระบบ</button></div>';
+}
+function openPw(recovery){
+  mountSheet('<h3>'+(recovery?'ตั้งรหัสผ่านใหม่':'ตั้ง / เปลี่ยนรหัสผ่าน')+'</h3><p class="note" style="margin:0">'+(recovery?'ตั้งรหัสผ่านใหม่เพื่อใช้เข้าสู่ระบบครั้งต่อไป':'ใช้รหัสผ่านนี้คู่กับอีเมล '+esc(acct.email)+' เพื่อเข้าสู่ระบบบนเครื่องอื่นหรือครั้งหลัง (ถ้าเคยเข้าด้วยลิงก์อีเมล ตั้งตรงนี้ได้เลย)')+'</p>'
+   +'<div class="field"><label for="pw1">รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)</label><input id="pw1" type="password" autocomplete="new-password"></div>'
+   +'<div class="field"><label for="pw2">ยืนยันรหัสผ่านใหม่</label><input id="pw2" type="password" autocomplete="new-password"></div>'
+   +'<p id="pw-msg" style="min-height:1.4em;margin:0"></p>'
+   +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="savepw" style="flex:1">บันทึกรหัสผ่าน</button></div>');
+}
+async function savePw(){
+  const a=document.getElementById('pw1').value,b=document.getElementById('pw2').value,m=document.getElementById('pw-msg');
+  if(a.length<6){m.textContent='รหัสผ่านต้องมีอย่างน้อย 6 ตัว';return}
+  if(a!==b){m.textContent='รหัสผ่านสองช่องไม่ตรงกัน';return}
+  m.textContent='กำลังบันทึก…';
+  const {error}=await sb.auth.updateUser({password:a});
+  if(error){m.textContent=authErr(error.message||'');return}
+  closeSheet(true);toast('บันทึกรหัสผ่านแล้ว ใช้เข้าสู่ระบบได้ครั้งต่อไป');
+}
+async function forgot(){
+  const el=document.getElementById('g-email'),m=document.getElementById('g-msg'),email=el&&el.value.trim();
+  if(!email){if(m)m.textContent='ใส่อีเมลก่อน แล้วกด "ลืมรหัสผ่าน" อีกครั้ง';return}
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:redirectUrl()});
+  if(m)m.textContent=error?'ส่งไม่สำเร็จ: '+authErr(error.message||''):'ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ '+email+' แล้ว เปิดอีเมลแล้วกดลิงก์';
 }
 function openAcct(){
   mountSheet('<h3>บัญชีและการซิงก์</h3><div id="acct-body" style="display:flex;flex-direction:column;gap:12px">'+acctInner()+'</div><button class="btn ghost" data-act="close">ปิด</button>');
@@ -1393,6 +1416,7 @@ function showGate(){
    +'<div class="field" style="text-align:left"><label for="g-pass">รหัสผ่าน (อย่างน้อย 6 ตัว)</label><input id="g-pass" type="password" autocomplete="current-password" placeholder="••••••"></div>'
    +'<button class="btn" data-act="psign">เข้าสู่ระบบ</button>'
    +'<button class="btn ghost" data-act="pup">สมัครใช้งานครั้งแรก (ตั้งรหัสผ่านนี้)</button>'
+   +'<button class="btn ghost" data-act="forgot" style="font-size:13px">ลืมรหัสผ่าน</button>'
    +'<button class="btn ghost" data-act="mlink" style="font-size:13px">หรือส่งลิงก์เข้าสู่ระบบทางอีเมลแทน</button>'
    +'<p id="g-msg" style="min-height:1.4em"></p>'
    +'<button class="btn ghost" data-act="demo">ปิด ใช้ในเครื่องนี้ต่อ</button></div>';
@@ -1438,7 +1462,8 @@ async function boot(){
   const {data}=await sb.auth.getSession();
   if(data&&data.session)signedIn(data.session,true);
   sb.auth.onAuthStateChange((ev,session)=>{
-    if(ev==='SIGNED_IN'&&session&&sync.uid!==session.user.id)signedIn(session,false);
+    if(ev==='PASSWORD_RECOVERY'&&session){if(sync.uid!==session.user.id)signedIn(session,true);setTimeout(()=>openPw(true),300)}
+    else if(ev==='SIGNED_IN'&&session&&sync.uid!==session.user.id)signedIn(session,false);
     if(ev==='SIGNED_OUT'){sync.uid=null;acct.name='';acct.email='';setAcct('local')}
   });
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoDue()});
@@ -1500,6 +1525,9 @@ document.addEventListener('click',e=>{
   else if(a==='salrange'){const amt=parseInt(document.getElementById('sr-amt').value.replace(/\D/g,''),10)||0;let f=+document.getElementById('sr-from').value,t=+document.getElementById('sr-to').value;if(t<f){const x=f;f=t;t=x}for(let i=f;i<=t;i++)s.sal[i]=amt;render();toast('ตั้งเงินเดือน ฿'+fmt(amt)+' ตั้งแต่ '+lab(f)+' ถึง '+lab(t)+' แล้ว')}
   else if(a==='acct')openAcct();
   else if(a==='syncnow')smartSync(false);
+  else if(a==='chpw')openPw(false);
+  else if(a==='savepw')savePw();
+  else if(a==='forgot')forgot();
   else if(a==='resolve')openConflict();
   else if(a==='pickl')pickConflict(true);
   else if(a==='pickc')pickConflict(false);
