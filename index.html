@@ -1235,6 +1235,26 @@ function repaintCell(){const sh=document.querySelector('#ov .sheet');if(sh)sh.in
 function openCell(col,mi){s.cellsel={col,mi};mountSheet(cellInner())}
 
 /* ---------- edit / delete a card or item ---------- */
+function planOfCol(c){
+  const idx=[];for(let i=0;i<MONTHS.length;i++)if(baseOf(c.id,i)>0)idx.push(i);
+  if(!idx.length)return {amt:'',from:cur(),to:Math.min(MONTHS.length-1,cur()+11)};
+  const cnt={};idx.forEach(i=>{const v=baseOf(c.id,i);cnt[v]=(cnt[v]||0)+1});
+  const amt=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
+  return {amt,from:idx[0],to:idx[idx.length-1]};
+}
+function planHtml(c){
+  const p=planOfCol(c),opt=(v)=>MONTHS.map((m,i)=>'<option value="'+i+'"'+(i===v?' selected':'')+'>'+esc(lab(i))+'</option>').join('');
+  return '<div class="field"><label for="ec-pm">ยอดผ่อนต่อเดือน (บาท)</label><input id="ec-pm" class="num" inputmode="decimal" value="'+p.amt+'" placeholder="0"></div>'
+   +'<div class="two"><div class="field"><label for="ec-pf">เริ่มรอบ</label><select id="ec-pf">'+opt(p.from)+'</select></div>'
+   +'<div class="field"><label for="ec-pt">ถึงรอบ</label><select id="ec-pt">'+opt(p.to)+'</select></div></div>'
+   +'<div class="hint" id="ec-pn"></div>';
+}
+function planNote(){
+  const a=pnum(document.getElementById('ec-pm').value),f=+document.getElementById('ec-pf').value,to=+document.getElementById('ec-pt').value,n=document.getElementById('ec-pn');
+  if(!n)return;
+  if(to<f){n.textContent='รอบสุดท้ายต้องไม่ก่อนรอบเริ่ม';return}
+  n.textContent=(to-f+1)+' เดือน × ฿'+fmt(a)+' = ฿'+fmt(r2(a*(to-f+1)))+' · บันทึกแล้วจะแทนที่ยอดรายเดือนเดิมของรายการนี้ (ยอดที่แก้เองรายช่องจะถูกล้าง)';
+}
 function openEditCol(id){
   const c=COLS.find(x=>x.id===id);if(!c)return;
   s.editcol=id;s.delArm=null;
@@ -1245,6 +1265,7 @@ function openEditCol(id){
    +(c.card?'<div class="two"><div class="field"><label for="ec-type">ประเภทบัตร</label><select id="ec-type"><option value="credit"'+(cardType(c)==='credit'?' selected':'')+'>บัตรเครดิต</option><option value="cash"'+(cardType(c)==='cash'?' selected':'')+'>บัตรเงินสด</option><option value="other"'+(cardType(c)==='other'?' selected':'')+'>อื่นๆ (ดอกเบี้ยไม่เท่ากันทุกยอด)</option></select></div>'
    +'<div class="field"><label for="ec-rate">ดอกเบี้ย % ต่อปี</label><input id="ec-rate" class="num" inputmode="decimal" value="'+cardRate(c)+'"></div></div>'
    +'<div class="hint">บัตรเครดิต: รูดแล้วจ่ายเต็มภายในรอบ ไม่คิดดอก · บัตรเงินสด: คิดดอกตั้งแต่วันที่รูด · อื่นๆ: ใส่ดอกเบี้ยและส่วนลดแยกตอนลงแต่ละรายการ (ช่องด้านบนเป็นค่าเริ่มต้น)</div>':'')
+   +(c.card?'':planHtml(c))
    +'<div class="field"><label for="ec-cat">หมวดประจำ (ใช้ในกราฟกับยอดที่ไม่ได้ระบุหมวด)</label><select id="ec-cat"><option value="">— ไม่ระบุ —</option>'+CATS.map(x=>'<option value="'+x.id+'"'+(c.cat===x.id?' selected':'')+'>'+x.e+' '+x.n+'</option>').join('')+'</select></div>'
    +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="savecol" style="flex:1">บันทึก</button></div>'
    +'<button class="btn ghost" data-act="delcol" id="delcol" style="color:var(--bad)">ลบรายการนี้</button>');
@@ -1259,6 +1280,17 @@ function saveCol(){
   if(c.card){const ct=document.getElementById('ec-cut');if(ct)c.cut=Math.min(31,Math.max(1,parseInt(ct.value,10)||c.cut));
     const ty=document.getElementById('ec-type'),rt=document.getElementById('ec-rate');
     if(ty)c.ctype=ty.value;if(rt){const v=parseFloat(rt.value);c.rate=isNaN(v)?cardRate(c):Math.max(0,v)}}
+  if(!c.card&&document.getElementById('ec-pm')){
+    const a=pnum(document.getElementById('ec-pm').value),f=+document.getElementById('ec-pf').value,to=+document.getElementById('ec-pt').value;
+    if(to<f){toast('รอบสุดท้ายต้องไม่ก่อนรอบเริ่ม');return}
+    const p0=planOfCol(c);
+    if(a!==p0.amt||f!==p0.from||to!==p0.to){
+      for(let i=0;i<MONTHS.length;i++){
+        const k=c.id+'-'+i;delete s.over[k];
+        if(a>0&&i>=f&&i<=to)s.baseEdit[k]=a;else delete s.baseEdit[k];
+      }
+    }
+  }
   closeSheet(true);render();toast('บันทึกแล้ว');
 }
 function delCol(){
@@ -1655,12 +1687,13 @@ function onField(e){
   }
   if(id==='hol-in'){s.hol=e.target.value.split(/\s+/).map(x=>x.trim()).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));setHol(s.hol);queueSave();return}
   if(id==='nc-type'){const v=e.target.value,on=v!=='other';document.getElementById('nc-cutw').style.display=on?'':'none';document.getElementById('nc-ratew').style.display=on?'':'none';if(on)document.getElementById('nc-rate').value=v==='cash'?25:v==='xcard'?0:16;return}
+  if(id==='ec-pm'||id==='ec-pf'||id==='ec-pt'){planNote();return}
   if(id==='ec-type'){document.getElementById('ec-rate').value=e.target.value==='cash'?25:e.target.value==='other'?0:16;return}
   if(['f-name','f-cat','f-catx','f-amt','f-col','f-from','f-to','f-int','f-iu','f-z','f-zm','f-tx','k'].includes(id)||id.indexOf('pv-in-')===0)readForm(e);
 }
 document.addEventListener('input',onField);
 document.addEventListener('change',e=>{if(e.target.id==='imp-file'&&e.target.files[0]){importFile(e.target.files[0]);e.target.value='';return}
-  if(['f-col','f-from','f-to','f-iu','f-du','f-z','f-tx','sp-pd','nc-type','ec-type'].includes(e.target.id))onField(e)});
+  if(['f-col','f-from','f-to','f-iu','f-du','f-z','f-tx','sp-pd','nc-type','ec-type','ec-pf','ec-pt'].includes(e.target.id))onField(e)});
 boot();
 </script>
 </body>
