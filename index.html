@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>My Financial Planner</title>
 <meta name="theme-color" content="#00c2a8">
 <link rel="manifest" href="manifest.json">
@@ -403,6 +403,23 @@ header h1{background:var(--grad);-webkit-background-clip:text;background-clip:te
 .debt .drow .l{display:flex;align-items:center;gap:8px;min-width:0}.debt .drow .l .av{width:28px;height:28px;font-size:12px;flex:none}
 .debt .drow b{text-align:right;font-size:14px}.debt .dh{font-size:11px;color:var(--muted)}.debt .dh b{font-weight:600;font-size:11px}
 .debt .cl{color:var(--good)}.debt .dt{border-bottom:0;font-weight:700}.debt .dt b{font-size:16px}
+
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{max-width:100%;overflow-x:clip}
+input,select,textarea{font-size:16px!important;touch-action:manipulation}
+
+body.locked{overflow:hidden}
+#lock{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))}
+#lock .lk{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+#lock .lk-art{width:96px;height:96px}#lock .lk-art svg{width:100%;height:100%}
+#lock h2{margin:0;font-family:var(--display);font-size:20px}
+.lk-dots{display:flex;gap:14px;height:18px}.lk-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);transition:background .12s}.lk-dots i.on{background:var(--accent)}
+.lk-dots.shake{animation:lkshake .4s}@keyframes lkshake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.lk-msg{margin:0;min-height:20px;font-size:13px;color:var(--bad)}
+.lk-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%}
+.lk-pad button{aspect-ratio:1.4;border-radius:18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 22px var(--display);cursor:pointer}
+.lk-pad button:active{background:var(--accent-soft)}
+.lk-forgot{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer}
 </style>
 </head>
 <body>
@@ -824,6 +841,7 @@ function viewSettings(){
   +'<table class="plain">'+dates+'</table><p class="note">เงินเดือนที่เข้าปลายเดือน ใช้จ่ายสำหรับเดือนถัดไป รอบเงินเดือนจึงเริ่มวันที่เงินเข้า</p></div>'
   +'<div class="sec-h"><h2>วันหยุดราชการเพิ่มเติม</h2></div><div class="card"><p class="note" style="margin-top:0">ใช้คำนวณวันเงินเดือนเข้า (ข้ามวันหยุด) ใส่วันที่ละบรรทัด รูปแบบ 2027-04-13</p><textarea class="sal-in" id="hol-in" rows="4" style="text-align:left" placeholder="2027-04-13&#10;2027-04-14&#10;2027-04-15">'+esc((s.hol||[]).join('\n'))+'</textarea></div>'
   +'<div class="sec-h"><h2>สำรองข้อมูล</h2></div><div class="card"><div class="cc-act" style="margin-top:0"><button class="btn sm" data-act="export">ส่งออกไฟล์ JSON</button><button class="btn ghost sm" data-act="import">นำเข้าไฟล์ JSON</button></div><input type="file" id="imp-file" accept=".json,application/json" hidden></div>'
+  +pinCard()
   +'<div class="card"><button class="btn ghost" data-act="reset">'+(s.resetArm?'กดอีกครั้งเพื่อยืนยัน (ล้างข้อมูลทั้งหมดในบัญชีนี้)':'ล้างข้อมูลทั้งหมด')+'</button></div>';
 }
 
@@ -1537,10 +1555,86 @@ function signedIn(session,restore){
   setAcct(meta.conflict?'conflict':'synced');
   if(restore)autoDue();else smartSync(false);
 }
+/* ---------- app lock (PIN) : stored only on this device ---------- */
+const PIN_KEY='debt-planner:pin';
+let lockBuf='',lockFails=0,lockUntil=0,hiddenAt=0;
+const pinInfo=()=>{try{return JSON.parse(localStorage.getItem(PIN_KEY)||'null')}catch(_){return null}};
+async function pinHash(pin,salt){
+  try{
+    const enc=new TextEncoder(),km=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveBits']);
+    const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:120000,hash:'SHA-256'},km,256);
+    return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(_){return 'x'+hashOf({pin,salt})}
+}
+async function pinOk(pin){const i=pinInfo();return !!i&&(await pinHash(pin,i.salt))===i.h}
+function paintLock(msg){
+  const el=document.getElementById('lock');if(!el)return;
+  const n=(pinInfo()||{len:4}).len;
+  const dots=Array.from({length:n},(_,i)=>'<i class="'+(i<lockBuf.length?'on':'')+'"></i>').join('');
+  const keys=[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>k===''?'<span></span>':'<button type="button" data-act="pk" data-k="'+k+'" aria-label="'+(k==='⌫'?'ลบ':k)+'">'+k+'</button>').join('');
+  el.innerHTML='<div class="lk"><div class="lk-art">'+(typeof WALLET!=='undefined'?WALLET:'')+'</div><h2>ใส่ PIN เพื่อเปิดแอพ</h2><div class="lk-dots" id="lk-dots">'+dots+'</div><p class="lk-msg" id="lk-msg">'+(msg||'')+'</p><div class="lk-pad">'+keys+'</div><button type="button" class="lk-forgot" data-act="pinforgot">ลืม PIN</button></div>';
+}
+function showLock(){
+  if(!pinInfo()||document.getElementById('lock'))return;
+  closeSheet&&closeSheet(true);
+  const el=document.createElement('div');el.id='lock';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');
+  document.body.appendChild(el);lockBuf='';paintLock('');document.body.classList.add('locked');
+}
+function hideLock(){const el=document.getElementById('lock');if(el)el.remove();document.body.classList.remove('locked');lockBuf='';lockFails=0}
+async function lockKey(k){
+  const i=pinInfo();if(!i)return hideLock();
+  if(Date.now()<lockUntil){paintLock('ลองใหม่ได้ในอีก '+Math.ceil((lockUntil-Date.now())/1000)+' วินาที');return}
+  if(k==='⌫')lockBuf=lockBuf.slice(0,-1);
+  else if(lockBuf.length<i.len)lockBuf+=k;
+  paintLock('');
+  if(lockBuf.length===i.len){
+    if(await pinOk(lockBuf)){hideLock();return}
+    lockFails++;lockBuf='';
+    if(lockFails>=5){lockUntil=Date.now()+30000;lockFails=0;paintLock('ใส่ผิดหลายครั้ง รอ 30 วินาที')}
+    else paintLock('PIN ไม่ถูกต้อง');
+    const d=document.getElementById('lk-dots');if(d){d.classList.add('shake');setTimeout(()=>d.classList.remove('shake'),400)}
+  }
+}
+function pinForgot(){
+  const el=document.getElementById('lk-msg');
+  if(!window.__pf){window.__pf=1;if(el)el.innerHTML='ลืม PIN = ต้องล้างข้อมูลในเครื่องนี้และเอา PIN ออก (ข้อมูลที่ซิงก์ไว้หรือไฟล์ JSON สำรองยังอยู่) กด "ลืม PIN" อีกครั้งเพื่อยืนยัน';return}
+  window.__pf=0;
+  try{localStorage.removeItem(PIN_KEY);localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_KEY+':bak');localStorage.removeItem(LS_KEY.replace(':v2',':meta'))}catch(_){}
+  if(sb)try{sb.auth.signOut()}catch(_){}
+  location.reload();
+}
+function openPin(mode){
+  const has=!!pinInfo();
+  mountSheet('<h3>'+(mode==='off'?'ปิดการล็อค PIN':has?'เปลี่ยน PIN':'ตั้ง PIN ล็อคแอพ')+'</h3>'
+   +'<p class="note" style="margin:0">PIN เก็บในเครื่องนี้เท่านั้น ไม่ถูกซิงก์ เป็นการกันคนอื่นเปิดดูหน้าจอ ไม่ได้เข้ารหัสข้อมูล</p>'
+   +(has?'<div class="field"><label for="pin0">PIN ปัจจุบัน</label><input id="pin0" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></div>':'')
+   +(mode==='off'?'':'<div class="field"><label for="pin1">PIN ใหม่ (4–6 หลัก)</label><input id="pin1" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></div>'
+   +'<div class="field"><label for="pin2">ยืนยัน PIN ใหม่</label><input id="pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="off"></div>')
+   +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="pinsave" data-m="'+mode+'" style="flex:1">'+(mode==='off'?'ปิดล็อค':'บันทึก')+'</button></div>');
+}
+async function savePin(mode){
+  const g=id=>{const e=document.getElementById(id);return e?e.value.replace(/\D/g,''):''};
+  if(pinInfo()&&!(await pinOk(g('pin0')))){toast('PIN ปัจจุบันไม่ถูกต้อง');return}
+  if(mode==='off'){try{localStorage.removeItem(PIN_KEY)}catch(_){}closeSheet(true);render();toast('ปิดการล็อคแล้ว');return}
+  const a=g('pin1'),b=g('pin2');
+  if(a.length<4||a.length>6){toast('PIN ต้องเป็นตัวเลข 4–6 หลัก');return}
+  if(a!==b){toast('PIN สองช่องไม่ตรงกัน');return}
+  const salt=Math.random().toString(36).slice(2)+Date.now().toString(36);
+  try{localStorage.setItem(PIN_KEY,JSON.stringify({salt,len:a.length,h:await pinHash(a,salt)}))}catch(_){toast('บันทึก PIN ไม่ได้');return}
+  closeSheet(true);render();toast('ตั้ง PIN แล้ว');
+}
+function pinCard(){
+  const has=!!pinInfo();
+  return '<div class="sec-h"><h2>ล็อคแอพด้วย PIN</h2><span>'+(has?'เปิดอยู่':'ปิดอยู่')+'</span></div><div class="card"><p class="note" style="margin-top:0">'+(has?'แอพจะขอ PIN ทุกครั้งที่เปิด และเมื่อกลับมาหลังพักจอเกิน 30 วินาที':'ตั้ง PIN 4–6 หลักเพื่อกันคนอื่นเปิดดูข้อมูลการเงิน')+'</p><div class="cc-act" style="margin:0">'
+    +(has?'<button class="btn sm" data-act="pinlock">ล็อคตอนนี้</button><button class="btn ghost sm" data-act="pinset" data-m="set">เปลี่ยน PIN</button><button class="btn ghost sm" data-act="pinset" data-m="off" style="color:var(--bad)">ปิดการล็อค</button>':'<button class="btn sm" data-act="pinset" data-m="set">ตั้ง PIN</button>')+'</div></div>';
+}
 async function boot(){
   try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);applyData(d)}}catch(_){}
   sync.lh=hashOf(persist());
   render();
+  showLock();
+  document.addEventListener('gesturestart',e=>e.preventDefault());
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>30000)showLock()});
   if(!sb){setAcct('local');return}
   setAcct('local');
   const {data}=await sb.auth.getSession();
@@ -1610,6 +1704,11 @@ document.addEventListener('click',e=>{
   else if(a==='acct')openAcct();
   else if(a==='syncnow')smartSync(false);
   else if(a==='chpw')openPw(false);
+  else if(a==='pk')lockKey(t.dataset.k);
+  else if(a==='pinforgot')pinForgot();
+  else if(a==='pinset')openPin(t.dataset.m);
+  else if(a==='pinsave')savePin(t.dataset.m);
+  else if(a==='pinlock')showLock();
   else if(a==='savepw')savePw();
   else if(a==='forgot')forgot();
   else if(a==='resolve')openConflict();
