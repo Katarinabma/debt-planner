@@ -404,7 +404,8 @@ header h1{background:var(--grad);-webkit-background-clip:text;background-clip:te
 .debt .drow b{text-align:right;font-size:14px}.debt .dh{font-size:11px;color:var(--muted)}.debt .dh b{font-weight:600;font-size:11px}
 .debt .cl{color:var(--good)}.debt .dt{border-bottom:0;font-weight:700}.debt .dt b{font-size:16px}
 
-html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{touch-action:pan-x pan-y}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html,body{max-width:100%;overflow-x:clip}
 input,select,textarea{font-size:16px!important;touch-action:manipulation}
 
@@ -1634,6 +1635,9 @@ async function boot(){
   render();
   showLock();
   document.addEventListener('gesturestart',e=>e.preventDefault());
+  ['gesturechange','gestureend'].forEach(n=>document.addEventListener(n,e=>e.preventDefault()));
+  document.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1)e.preventDefault()},{passive:false});
+  document.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault()},{passive:false});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>30000)showLock()});
   if(!sb){setAcct('local');return}
   setAcct('local');
