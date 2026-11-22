@@ -592,7 +592,7 @@ function rowHtml(x,mi){
    +'<div class="rcol"><b class="num">฿'+fmt(x.amt)+'</b><small class="num '+(x.after<0?'neg':'')+'">เหลือ '+(x.after<0?'-':'')+'฿'+fmt(Math.abs(x.after))+'</small></div>'
    +'<div class="acts">'
    +(x.amt>0?'<button class="chip full'+(x.paid?' on':'')+'" data-act="pay" data-id="'+id+'" data-mi="'+mi+'" aria-pressed="'+x.paid+'" aria-label="จ่ายหมด '+esc(x.c.name)+'">'+ic.ok+(sp?'จ่ายที่<wbr>เหลือ':'จ่าย<wbr>หมด')+'</button>':'')
-   +'<button class="chip part'+(sp?' on':'')+'" data-act="spl" data-id="'+id+'" data-mi="'+mi+'" aria-pressed="'+sp+'" aria-label="แบ่งจ่าย '+esc(x.c.name)+'">'+ic.ok+'แบ่ง<wbr>จ่าย</button>'
+   +'<button class="chip part'+(sp?' on':'')+'" data-act="spl" data-id="'+id+'" data-mi="'+mi+'" aria-pressed="'+sp+'" aria-label="จ่ายไม่หมด ยกยอดไปเดือนหน้า '+esc(x.c.name)+'">'+ic.ok+'จ่าย<wbr>ไม่หมด</button>'
    +'</div></div></div>';
 }
 function askPay(mi,id){
@@ -625,7 +625,7 @@ function viewMonth(){
   const mi=s.mi,cu=cur(),two=mi+1<MONTHS.length;
   const nav='<div class="cnav"><button data-act="mv" data-d="-1" aria-label="ย้อนไป 1 รอบ"'+(mi===0?' disabled':'')+'>‹</button><div><b>'+labFull(mi)+(two?' และ '+labFull(mi+1):'')+'</b><small>'+(mi===cu?'รอบปัจจุบัน + รอบถัดไป':'เลื่อนดูรอบอื่น')+'</small></div><button data-act="mv" data-d="1" aria-label="ไปข้างหน้า 1 รอบ"'+(mi>=MONTHS.length-2?' disabled':'')+'>›</button></div>';
   const onboard=(salOf(mi)===0&&total(mi)===0&&(!two||(salOf(mi+1)===0&&total(mi+1)===0)))?'<div class="card"><b style="font-family:var(--display);font-size:17px">เริ่มต้นใช้งาน</b><p class="note">ทำ 2 ขั้นตอน แล้วรายการที่ต้องจ่ายจะขึ้นที่นี่</p><div class="cc-act"><button class="btn sm" data-act="gosettings">1. ตั้งเงินเดือน</button><button class="btn sm" data-act="newcol">2. เพิ่มบัตร/หนี้</button></div></div>':'';
-  return nav+onboard+cycleSection(mi)+(two?cycleSection(mi+1):'')+'<div class="hint2">ปัดรายการไปทางขวา หรือกด "จ่ายหมด" เมื่อจ่ายแล้ว · กด "แบ่งจ่าย" เพื่อยกยอดไปเดือนถัดไปพร้อมดอกเบี้ยคร่าวๆ</div>';
+  return nav+onboard+cycleSection(mi)+(two?cycleSection(mi+1):'')+'<div class="hint2">ปัดรายการไปทางขวา หรือกด "จ่ายหมด" เมื่อจ่ายแล้ว · กด "จ่ายไม่หมด" เพื่อยกยอดไปเดือนถัดไปพร้อมดอกเบี้ยคร่าวๆ</div>';
 }
 
 /* ---------- charts ---------- */
@@ -793,13 +793,13 @@ function suggestFrom(colId){
 function viewCards(){
   const cu=cur();
   const cards=cardsOf().map(c=>{
-    const nc=nextCycle(c),bal=cell(c.id,cu),done=s.entries.some(e=>e.kind==='split'&&e.col===c.id);
+    const nc=nextCycle(c),bal=cell(c.id,cu),done=!!splitEntry(c.id,cu);
     return '<div class="card"><div class="cc-top">'+avatar(c)+'<h3>'+esc(c.name)+'</h3><b class="big num">฿'+fmt(bal)+'</b></div>'
     +'<div class="cc-meta"><span>ยอดรอบนี้</span><span>ตัดรอบ <b>วันที่ '+c.cut+'</b></span><span>ครบกำหนด <b>วันที่ '+c.due+'</b></span></div>'
     +'<div class="cc-note">รูดวันนี้ จะเข้ารอบตัด '+dm(nc.cut)+' และต้องจ่ายภายใน '+dm(nc.due)+'</div>'
     +'<div class="cc-act"><button class="btn sm" data-act="detail" data-id="'+c.id+'" data-mi="'+cu+'">ดูรายการ ('+itemCount(c.id,cu)+')</button>'
     +'<button class="btn ghost sm" data-act="add" data-id="'+c.id+'">ลงรายการ</button><button class="btn ghost sm" data-act="editcol" data-id="'+c.id+'">แก้ไข</button>'
-    +(bal>0?'<button class="btn ghost sm" data-act="split" data-id="'+c.id+'"'+(done?' disabled':'')+'>'+(done?'แบ่งยอดแล้ว':'แบ่งจ่ายยอดรอบนี้')+'</button>':'')+'</div></div>';
+    +(bal>0?'<button class="btn ghost sm" data-act="split" data-id="'+c.id+'"'+(done?' disabled':'')+'>'+(done?'ยกยอดแล้ว':'จ่ายไม่หมด · ยกยอดพร้อมดอก')+'</button>':'')+'</div></div>';
   }).join('');
   const others=COLS.filter(c=>!c.card).map(c=>
     '<button class="itemrow" data-act="detail" data-id="'+c.id+'" data-mi="'+cu+'"><span class="l">'+avatar(c)+'<span><b>'+esc(c.name)+'</b><small>ครบกำหนดทุกวันที่ '+c.due+' · รายการ '+itemCount(c.id,cu)+'</small></span></span><b class="n num">฿'+fmt(cell(c.id,cu))+'</b></button>').join('')||'<p class="note" style="padding:10px 0">ยังไม่มีรายการ</p>';
@@ -1087,14 +1087,14 @@ function splInner(){
     +q.lines.map((l,i)=>'<div class="two"><div class="field"><label for="sp-la-'+i+'">ยอดรายการ'+(q.lines.length>1?' '+(i+1):'')+'</label><input id="sp-la-'+i+'" class="num" inputmode=\"decimal\" value="'+(l.amt||'')+'"></div>'
       +'<div class="field"><label for="sp-ld-'+i+'">วันที่รูด</label><input id="sp-ld-'+i+'" type="date" value="'+esc(l.date)+'">'+(q.lines.length>1?'<button class="x" data-act="spldel" data-i="'+i+'" style="margin-top:4px;text-align:left">ลบรายการนี้</button>':'')+'</div></div>').join('')
     +'<button class="btn ghost sm" data-act="splline">+ เพิ่มรายการรูด</button>':'';
-  return '<h3>แบ่งจ่าย '+esc(c.name)+'</h3><p class="note" style="margin:0">ยอดรอบ '+labFull(q.mi)+' ฿'+fmt(A)+' · ยอดที่ไม่จ่ายตอนนี้จะยกไปเดือนถัดไป'+(c.card?' · ดอกเบี้ย'+(cardType(c)==='cash'?'บัตรเงินสด คิดรายวันลดต้นลดดอก':'บัตรเครดิต จ่ายไม่เต็มจึงคิดย้อนหลังจากวันที่รูด'):'')+'</p>'
+  return '<h3>จ่ายไม่หมด · ยกยอด '+esc(c.name)+'</h3><p class="note" style="margin:0">ยอดรอบ '+labFull(q.mi)+' ฿'+fmt(A)+' · ยอดที่ไม่จ่ายตอนนี้จะยกไปเดือนถัดไป'+(c.card?' · ดอกเบี้ย'+(cardType(c)==='cash'?'บัตรเงินสด คิดรายวันลดต้นลดดอก':'บัตรเครดิต จ่ายไม่เต็มจึงคิดย้อนหลังจากวันที่รูด'):'')+'</p>'
    +lines
    +'<div class="two"><div class="field"><label for="sp-pay">จ่ายรอบนี้ (บาท)</label><input id="sp-pay" class="num" inputmode=\"decimal\" value="'+(q.pay||0)+'"></div>'
    +'<div class="field"><label for="sp-rate">ดอกเบี้ย % ต่อปี</label><input id="sp-rate" class="num" inputmode="decimal" value="'+q.rate+'"></div></div>'
    +(c.card?'<div class="field"><label for="sp-pd">วันที่จ่ายรอบนี้</label><input id="sp-pd" type="date" value="'+esc(q.pd)+'"></div>':'')
    +'<label>ยกไปกี่เดือน: <b id="sp-kv" class="num">'+q.k+'</b><input id="sp-k" type="range" min="1" max="'+splCalc().maxK+'" value="'+q.k+'"></label>'
    +'<div id="sp-pv">'+splPv()+'</div>'
-   +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="splok" style="flex:1">ยืนยันแบ่งจ่าย</button></div>';
+   +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="splok" style="flex:1">ยืนยัน ยกยอดลงตาราง</button></div>';
 }
 function openSpl(colId,mi){
   const c=COLS.find(x=>x.id===colId),ex=splitEntry(colId,mi);
@@ -1246,7 +1246,7 @@ function cellInner(){
    +'<button class="btn'+(pd?' ghost':'')+'" data-act="cellpay">'+(pd?'ยกเลิกการติ๊ก (ยังไม่จ่าย)':'ติ๊กว่าจ่ายแล้ว')+'</button>'
    +'<div class="field"><label for="c-amt">ยอดช่องนี้ (บาท)</label><input id="c-amt" class="num" inputmode=\"decimal\" value="'+(cell(col,mi)||'')+'" placeholder="0"></div>'
    +'<p class="note" style="margin:0" id="c-note">'+(ov?'แก้ยอดเองอยู่ · ยอดตามรายการเดิม ฿'+fmt(orig):'ยอดตามรายการ ฿'+fmt(orig)+' · พิมพ์ยอดใหม่เพื่อแก้เฉพาะช่องนี้')+'</p>'
-   +'<div class="cc-act" style="margin:0">'+(ov?'<button class="btn ghost sm" data-act="cellreset">คืนยอดเดิม</button>':'')+'<button class="btn ghost sm" data-act="celldetail">ดูรายการข้างใน</button></div>'
+   +'<div class="cc-act" style="margin:0">'+(ov?'<button class="btn ghost sm" data-act="cellreset">คืนยอดเดิม</button>':'')+'<button class="btn ghost sm" data-act="celldetail">ดูรายการข้างใน</button>'+(origCell(col,mi)>0&&!pd?'<button class="btn sm" data-act="cellspl">จ่ายไม่หมด · ยกยอดพร้อมดอก</button>':'')+'</div>'
    +'<button class="btn" data-act="close">เสร็จ</button>';
 }
 function repaintCell(){const sh=document.querySelector('#ov .sheet');if(sh)sh.innerHTML=cellInner()}
@@ -1678,6 +1678,7 @@ document.addEventListener('click',e=>{
   else if(a==='cellsheet')openCell(t.dataset.id,+t.dataset.mi);
   else if(a==='cellpay'){const k=s.cellsel.mi+'-'+s.cellsel.col;s.paid[k]=!s.paid[k];repaintCell();queueSave()}
   else if(a==='cellreset'){delete s.over[s.cellsel.col+'-'+s.cellsel.mi];repaintCell();queueSave()}
+  else if(a==='cellspl'){const q=s.cellsel;closeSheet();openSpl(q.col,q.mi)}
   else if(a==='celldetail'){const q=s.cellsel;closeSheet();openDetail(q.col,q.mi)}
   else if(a==='dmv'){s.detail.mi=Math.min(MONTHS.length-1,Math.max(0,s.detail.mi+ +t.dataset.d));repaintDetail()}
   else if(a==='delE'){s.entries=s.entries.filter(x=>x.id!==t.dataset.id);repaintDetail();toast('ลบรายการแล้ว ยอดทุกเดือนกลับเป็นเดิม')}
