@@ -1667,6 +1667,9 @@ function importFile(file){
 
 /* ---------- events ---------- */
 let swallow=false;
+let lastErr=0;
+window.addEventListener('error',e=>{if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String(e.message||'').slice(0,90)+' (แคปหน้านี้ส่งให้ผมได้)')});
+window.addEventListener('unhandledrejection',e=>{if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String((e.reason&&e.reason.message)||e.reason||'').slice(0,90))});
 document.addEventListener('click',e=>{
   if(swallow){swallow=false;e.preventDefault();e.stopPropagation();return}
   const t=e.target.closest('[data-act]');if(!t)return;
