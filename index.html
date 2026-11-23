@@ -551,6 +551,7 @@ const cell=(col,mi)=>isOver(col,mi)?s.over[col+'-'+mi]:origCell(col,mi);
 const total=mi=>r2(COLS.reduce((t,c)=>t+cell(c.id,mi),0));
 const remaining=mi=>r2(salOf(mi)+carryOf(mi)-total(mi));
 const hashId=t=>{let x=0;for(const ch of String(t))x=(x*31+ch.charCodeAt(0))>>>0;return x};
+const EXTRA_COLORS=[['#00c2a8','#2f6bff'],['#ff8a5c','#ff5c8a'],['#8b5cf6','#ec4899'],['#f59e0b','#ef4444'],['#10b981','#0ea5e9'],['#6366f1','#22d3ee'],['#f43f5e','#fb923c'],['#14b8a6','#84cc16']];
 const colorOf=c=>c.col||EXTRA_COLORS[hashId(c.id)%EXTRA_COLORS.length];
 const symOf=c=>c.sym||Array.from(c.name)[0];
 const avatar=c=>{const k=colorOf(c);return '<div class="av" style="background:linear-gradient(135deg,'+k[0]+','+k[1]+')">'+esc(symOf(c))+'</div>'};
