@@ -1643,7 +1643,7 @@ async function savePin(mode){
 function pinCard(){
   const has=!!pinInfo();
   return '<div class="sec-h"><h2>ล็อคแอพด้วย PIN</h2><span>'+(has?'เปิดอยู่':'ปิดอยู่')+'</span></div><div class="card"><p class="note" style="margin-top:0">'+(has?'แอพจะขอ PIN ทุกครั้งที่เปิด และเมื่อกลับมาหลังพักจอเกิน 30 วินาที':'ตั้ง PIN 4–6 หลักเพื่อกันคนอื่นเปิดดูข้อมูลการเงิน')+'</p><div class="cc-act" style="margin:0">'
-    +(has?'<button class="btn sm" data-act="pinlock">ล็อคตอนนี้</button><button class="btn ghost sm" data-act="pinset" data-m="set">เปลี่ยน PIN</button><button class="btn ghost sm" data-act="pinset" data-m="off" style="color:var(--bad)">ปิดการล็อค</button>':'<button class="btn sm" data-act="pinset" data-m="set">ตั้ง PIN</button>')+'</div></div>';
+    +(has?'<button class="btn sm" data-act="pinlock">ล็อคตอนนี้</button><button class="btn ghost sm" data-act="pinset" data-m="set">เปลี่ยน PIN</button><button class="btn ghost sm" data-act="pinset" data-m="off" style="color:var(--bad)">ปิดการล็อค</button>':'<button class="btn sm" data-act="pinset" data-m="set">ตั้ง PIN</button>')+'</div></div>'+'<p class="note" style="text-align:center;margin:10px 0 0">เวอร์ชันแอพ '+BUILD+'</p>';
 }
 async function boot(){
   try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);applyData(d)}}catch(_){}
@@ -1685,7 +1685,7 @@ function importFile(file){
 /* ---------- events ---------- */
 let swallow=false;
 /* ---------- always-fresh loading (GitHub Pages caches pages for minutes) ---------- */
-const BUILD='20261128-0939';
+const BUILD='20261128-0943';
 try{if(/[?&]u=\d+/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(_){}
 function hardRefresh(btn){
   if(btn&&btn.classList)btn.classList.add('spin');
