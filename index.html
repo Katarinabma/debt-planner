@@ -434,6 +434,8 @@ header .hr{display:flex;align-items:center;gap:8px;min-width:0}
 .rfbtn:active{transform:scale(.92)}.rfbtn.spin svg{animation:rfspin .7s linear infinite}@keyframes rfspin{to{transform:rotate(360deg)}}
 
 #newv{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));z-index:9000;border:0;border-radius:99px;padding:10px 18px;font:600 13px var(--display,inherit);color:#fff;background:linear-gradient(135deg,#2f6bff,#a855f7);box-shadow:0 8px 24px rgba(80,70,200,.4);cursor:pointer}
+
+.pv-in{width:100%;max-width:120px;padding:6px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:right}
 </style>
 </head>
 <body>
@@ -1051,7 +1053,7 @@ function splLinesOk(q,A){
   if(sum!==A)return {ok:false,msg:'ยอดรวมรายการ ฿'+fmt(sum)+' ไม่เท่ากับยอดบิล ฿'+fmt(A)+(sum<A?' · ยังเหลือ ฿'+fmt(A-sum):' · เกิน ฿'+fmt(sum-A))};
   return {ok:true,lines:L.map(l=>({amt:l.amt,date:parseD(l.date)}))};
 }
-function splCalc(){
+function splCalcRaw(){
   const q=s.sp,c=COLS.find(x=>x.id===q.col),A=cell(q.col,q.mi),pay=Math.min(A,Math.max(0,q.pay)),R=A-pay;
   const maxK=Math.max(1,Math.min(6,MONTHS.length-2-q.mi)),k=Math.min(maxK,Math.max(1,q.k));
   const out={};out[q.mi]=-R;
@@ -1080,12 +1082,34 @@ function splCalc(){
   for(let j=1;j<=k;j++)out[q.mi+j]=j===1?first:bs;
   return Object.assign(base,{intr,T});
 }
+/* manual overrides on top of the computed plan: real interest from the bill, interest discount, per-month amounts */
+function splCalc(){
+  const q=s.sp,c=splCalcRaw();
+  if(c.bad||c.R<=0)return c;
+  const mi=q.mi;
+  const hasInt=q.int!==undefined&&q.int!==''&&!isNaN(+q.int),dsc=Math.max(0,+q.dsc||0);
+  if(hasInt||dsc>0){
+    const target=Math.max(0,r2((hasInt?+q.int:c.intr)-dsc)),diff=r2(target-c.intr);
+    if(diff!==0){
+      const ks=Object.keys(c.out).map(Number).filter(i=>i>mi&&c.out[i]>0).sort((a,b)=>a-b);
+      if(ks.length){
+        const sh=diff<0?-fl2(-diff/ks.length):fl2(diff/ks.length);let rest=diff;
+        ks.forEach((i,n)=>{const d=n===ks.length-1?rest:sh;const v=Math.max(0,r2(c.out[i]+d));rest=r2(rest-(v-c.out[i]));c.out[i]=v});
+      }
+    }
+    c.intr=target;c.T=r2(c.R+target);c.manualInt=true;
+  }
+  const mo=q.mo||{};
+  Object.keys(mo).forEach(k=>{const i=+k;if(i>mi&&i<MONTHS.length&&mo[k]!==''&&mo[k]!==undefined)c.out[i]=r2(+mo[k]-cell(q.col,i))});
+  if(Object.keys(mo).length){const sum=Object.keys(c.out).filter(i=>+i>mi).reduce((a,i)=>a+c.out[i],0);c.intr=r2(sum-c.R);c.T=r2(c.R+c.intr);c.manualAmt=true}
+  return c;
+}
 function splPv(){
   const q=s.sp,c=splCalc();
   if(c.bad)return '<div class="check bad">'+esc(c.bad)+'</div>';
   const rows=Object.keys(c.out).map(Number).sort((a,b)=>a-b).filter(i=>i!==q.mi).map(i=>{
     const after=remaining(i)-c.out[i];
-    return '<div class="pv-r"><span>'+lab(i)+'</span><span class="num">฿'+fmt(cell(q.col,i)+c.out[i])+'</span><span class="'+afterCls(after)+'">'+(after<0?'-':'')+fmt(Math.abs(after))+'</span></div>';
+    return '<div class="pv-r"><span>'+lab(i)+'</span><span><input class="num pv-in" id="sp-m-'+i+'" inputmode="decimal" value="'+r2(cell(q.col,i)+c.out[i])+'" aria-label="ยอดจ่าย '+lab(i)+'"></span><span class="'+afterCls(after)+'">'+(after<0?'-':'')+fmt(Math.abs(after))+'</span></div>';
   }).join('');
   const bad=Object.keys(c.out).map(Number).filter(i=>i!==q.mi&&remaining(i)-c.out[i]<0).length;
   let det='';
@@ -1108,6 +1132,9 @@ function splInner(){
    +'<div class="field"><label for="sp-rate">ดอกเบี้ย % ต่อปี</label><input id="sp-rate" class="num" inputmode="decimal" value="'+q.rate+'"></div></div>'
    +(c.card?'<div class="field"><label for="sp-pd">วันที่จ่ายรอบนี้</label><input id="sp-pd" type="date" value="'+esc(q.pd)+'"></div>':'')
    +'<label>ยกไปกี่เดือน: <b id="sp-kv" class="num">'+q.k+'</b><input id="sp-k" type="range" min="1" max="'+splCalc().maxK+'" value="'+q.k+'"></label>'
+   +(c.card?'<div class="two"><div class="field"><label for="sp-int">ดอกเบี้ยจริงตามบิล (บาท)</label><input id="sp-int" class="num" inputmode="decimal" placeholder="ว่าง = ใช้ที่คำนวณ" value="'+(q.int===undefined?'':q.int)+'"></div>'
+     +'<div class="field"><label for="sp-dsc">ส่วนลดดอกเบี้ย (บาท)</label><input id="sp-dsc" class="num" inputmode="decimal" placeholder="0" value="'+(q.dsc||'')+'"></div></div>':'')
+   +'<p class="note" style="margin:0">แก้ยอดจ่ายของแต่ละเดือนด้านล่างเองได้ (ตามที่บิลจริงเรียกเก็บ)</p>'
    +'<div id="sp-pv">'+splPv()+'</div>'
    +'<div style="display:flex;gap:8px"><button class="btn ghost" data-act="close" style="flex:1">ยกเลิก</button><button class="btn" data-act="splok" style="flex:1">ยืนยัน ยกยอดลงตาราง</button></div>';
 }
@@ -1685,7 +1712,7 @@ function importFile(file){
 /* ---------- events ---------- */
 let swallow=false;
 /* ---------- always-fresh loading (GitHub Pages caches pages for minutes) ---------- */
-const BUILD='20261128-0943';
+const BUILD='20261128-0947';
 try{if(/[?&]u=\d+/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(_){}
 function hardRefresh(btn){
   if(btn&&btn.classList)btn.classList.add('spin');
@@ -1804,6 +1831,15 @@ document.addEventListener('pointercancel',endDrag);
 function onField(e){
   const id=e.target.id||'';
   if(id.indexOf('sp-')===0&&s.sp){
+    if(id.indexOf('sp-m-')===0){
+      const i=+id.slice(5),v=e.target.value.replace(/[^\d.]/g,'');
+      s.sp.mo=s.sp.mo||{};if(v==='')delete s.sp.mo[i];else s.sp.mo[i]=pnum(v);
+      if(e.type==='change'){const pv=document.getElementById('sp-pv');if(pv)pv.innerHTML=splPv()}
+      return;
+    }
+    if(id==='sp-int')s.sp.int=e.target.value.replace(/[^\d.]/g,'')===''?'':pnum(e.target.value);
+    if(id==='sp-dsc')s.sp.dsc=pnum(e.target.value);
+    if(['sp-pay','sp-rate','sp-k','sp-pd','sp-int','sp-dsc'].includes(id)||id.indexOf('sp-la-')===0||id.indexOf('sp-ld-')===0)s.sp.mo={};
     if(id==='sp-pay')s.sp.pay=pnum(e.target.value);
     if(id==='sp-rate')s.sp.rate=Math.max(0,parseFloat(e.target.value)||0);
     if(id==='sp-pd')s.sp.pd=e.target.value||s.sp.pd;
@@ -1837,6 +1873,7 @@ function onField(e){
   if(['f-name','f-cat','f-catx','f-amt','f-col','f-from','f-to','f-int','f-iu','f-z','f-zm','f-tx','k'].includes(id)||id.indexOf('pv-in-')===0)readForm(e);
 }
 document.addEventListener('input',onField);
+document.addEventListener('change',e=>{if((e.target.id||'').indexOf('sp-m-')===0)onField(e)});
 document.addEventListener('change',e=>{if(e.target.id==='imp-file'&&e.target.files[0]){importFile(e.target.files[0]);e.target.value='';return}
   if(['f-col','f-from','f-to','f-iu','f-du','f-z','f-tx','sp-pd','nc-type','ec-type','ec-pf','ec-pt'].includes(e.target.id))onField(e)});
 boot();
