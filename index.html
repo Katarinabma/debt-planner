@@ -432,6 +432,8 @@ body.locked{overflow:hidden}
 header .hr{display:flex;align-items:center;gap:8px;min-width:0}
 .rfbtn{flex:none;width:38px;height:38px;border-radius:50%;border:0;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);display:grid;place-items:center;cursor:pointer}
 .rfbtn:active{transform:scale(.92)}.rfbtn.spin svg{animation:rfspin .7s linear infinite}@keyframes rfspin{to{transform:rotate(360deg)}}
+
+#newv{position:fixed;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top));z-index:9000;border:0;border-radius:99px;padding:10px 18px;font:600 13px var(--display,inherit);color:#fff;background:linear-gradient(135deg,#2f6bff,#a855f7);box-shadow:0 8px 24px rgba(80,70,200,.4);cursor:pointer}
 </style>
 </head>
 <body>
@@ -1648,6 +1650,7 @@ async function boot(){
   sync.lh=hashOf(persist());
   render();
   showLock();
+  checkNew();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkNew()});
   document.addEventListener('gesturestart',e=>e.preventDefault());
   ['gesturechange','gestureend'].forEach(n=>document.addEventListener(n,e=>e.preventDefault()));
   document.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1)e.preventDefault()},{passive:false});
@@ -1681,6 +1684,26 @@ function importFile(file){
 
 /* ---------- events ---------- */
 let swallow=false;
+/* ---------- always-fresh loading (GitHub Pages caches pages for minutes) ---------- */
+const BUILD='20261128-0939';
+try{if(/[?&]u=\d+/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(_){}
+function hardRefresh(btn){
+  if(btn&&btn.classList)btn.classList.add('spin');
+  try{saveLocal()}catch(_){}
+  if(/github\.io$/.test(location.hostname))location.replace(location.pathname+'?u='+Date.now()+location.hash);
+  else location.reload();
+}
+async function checkNew(){
+  if(!/github\.io$/.test(location.hostname)||document.getElementById('newv'))return;
+  try{
+    const r=await fetch('version.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return;
+    const j=await r.json();
+    if(j&&j.build&&j.build!==BUILD){
+      const b=document.createElement('button');b.id='newv';b.type='button';b.dataset.act='refresh';
+      b.textContent='มีเวอร์ชันใหม่ · แตะเพื่ออัปเดต';document.body.appendChild(b);
+    }
+  }catch(_){}
+}
 let lastErr=0;
 window.addEventListener('error',e=>{if(!e.filename&&!e.lineno&&/^Script error\.?$/.test(String(e.message||'')))return;if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String(e.message||'').slice(0,90)+' (แคปหน้านี้ส่งให้ผมได้)')});
 window.addEventListener('unhandledrejection',e=>{if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String((e.reason&&e.reason.message)||e.reason||'').slice(0,90))});
@@ -1726,8 +1749,7 @@ document.addEventListener('click',e=>{
   else if(a==='acct')openAcct();
   else if(a==='syncnow')smartSync(false);
   else if(a==='chpw')openPw(false);
-  else if(a==='refresh'){t.classList.add('spin');try{saveLocal()}catch(_){}
-    Promise.race([fetch(location.href.split('#')[0],{cache:'reload'}),new Promise(r=>setTimeout(r,2500))]).catch(()=>{}).then(()=>location.reload())}
+  else if(a==='refresh')hardRefresh(t);
   else if(a==='pk')lockKey(t.dataset.k);
   else if(a==='pinforgot')pinForgot();
   else if(a==='pinset')openPin(t.dataset.m);
