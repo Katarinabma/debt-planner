@@ -1438,6 +1438,7 @@ function pullApply(d){
   sync.lh='';saveLocal();render();
   markSynced(hashOf(persist()));
 }
+const isBlankPlan=o=>!(o.entries&&o.entries.length)&&!Object.keys(o.baseEdit||{}).length&&!Object.keys(o.over||{}).length&&!(o.sal||[]).some(v=>+v>0);
 async function smartSync(silent){
   if(!sb||!sync.uid||sync.busy)return;
   sync.busy=true;setAcct('saving');
@@ -1452,6 +1453,7 @@ async function smartSync(silent){
       if(C===L){markSynced(L);msg='ข้อมูลตรงกันอยู่แล้ว'}
       else if(meta.base&&C===meta.base){await pushNow(obj);msg='ส่งการแก้ไขขึ้นคลาวด์แล้ว'}
       else if(meta.base&&L===meta.base){pullApply(data.data);msg='ดึงข้อมูลล่าสุดจากคลาวด์แล้ว'}
+      else if(isBlankPlan(obj)){pullApply(data.data);msg='เครื่องนี้ยังว่างอยู่ ดึงข้อมูลจากคลาวด์มาให้แล้ว'}
       else{sync.cloud=data;meta.conflict=true;saveMeta();sync.busy=false;setAcct('conflict');if(!silent)openConflict();return}
     }
   }catch(e){sync.busy=false;setAcct('error',(e&&e.message)||'');return}
@@ -1680,7 +1682,7 @@ function importFile(file){
 /* ---------- events ---------- */
 let swallow=false;
 let lastErr=0;
-window.addEventListener('error',e=>{if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String(e.message||'').slice(0,90)+' (แคปหน้านี้ส่งให้ผมได้)')});
+window.addEventListener('error',e=>{if(!e.filename&&!e.lineno&&/^Script error\.?$/.test(String(e.message||'')))return;if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String(e.message||'').slice(0,90)+' (แคปหน้านี้ส่งให้ผมได้)')});
 window.addEventListener('unhandledrejection',e=>{if(Date.now()-lastErr<4000)return;lastErr=Date.now();toast('แอพเจอข้อผิดพลาด: '+String((e.reason&&e.reason.message)||e.reason||'').slice(0,90))});
 document.addEventListener('click',e=>{
   if(swallow){swallow=false;e.preventDefault();e.stopPropagation();return}
