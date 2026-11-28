@@ -428,6 +428,10 @@ body.locked{overflow:hidden}
 .rw.sp-paid .namebtn small:first-of-type{color:#bd4a8c}
 .grid td.spl::after,.grid td.paidsp::after{content:'↪';color:#c25aa0;font-size:11px;margin-left:2px}
 .grid td.paidsp{background:rgba(199,140,243,.14);text-decoration:none;opacity:1}
+
+header .hr{display:flex;align-items:center;gap:8px;min-width:0}
+.rfbtn{flex:none;width:38px;height:38px;border-radius:50%;border:0;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);display:grid;place-items:center;cursor:pointer}
+.rfbtn:active{transform:scale(.92)}.rfbtn.spin svg{animation:rfspin .7s linear infinite}@keyframes rfspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -1367,7 +1371,7 @@ function render(){
   const nav=[['month','ค่าใช้จ่าย',ic.cal],['table','ตารางภาพรวม',ic.tbl],['cards','ตั้งค่าบัตรและอื่นๆ',ic.set]]
     .map(x=>'<button data-act="tab" data-t="'+x[0]+'"'+(s.tab===x[0]?' aria-current="page"':'')+'>'+x[2]+x[1]+'</button>').join('');
   document.getElementById('app').innerHTML='<div class="shell"><aside class="side"><div class="brand"><span class="logo">'+LOGO+'</span>My Financial Planner</div><nav>'+nav+'</nav><div class="side-foot">ข้อมูลของคุณ</div></aside>'
-    +'<div class="content"><header><div><h1>'+TITLES[s.tab]+'</h1><p>วันนี้ '+WD[TODAY.getDay()]+' '+dm(TODAY)+' '+(TODAY.getFullYear()+543)+'</p></div>'+chipHtml()+'</header><main>'+body+'</main></div>'
+    +'<div class="content"><header><div><h1>'+TITLES[s.tab]+'</h1><p>วันนี้ '+WD[TODAY.getDay()]+' '+dm(TODAY)+' '+(TODAY.getFullYear()+543)+'</p></div><div class="hr">'+chipHtml()+'<button type="button" class="rfbtn" data-act="refresh" aria-label="รีเฟรชหน้า" title="รีเฟรชหน้า"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div></header><main>'+body+'</main></div>'
     +'<button class="fab" data-act="add" aria-label="ลงรายการ"><span class="fabw">'+WALLET+'</span><span>ลงรายการ</span></button></div>';
   const tb=document.querySelector('.tbl');
   if(tb){
@@ -1720,6 +1724,8 @@ document.addEventListener('click',e=>{
   else if(a==='acct')openAcct();
   else if(a==='syncnow')smartSync(false);
   else if(a==='chpw')openPw(false);
+  else if(a==='refresh'){t.classList.add('spin');try{saveLocal()}catch(_){}
+    Promise.race([fetch(location.href.split('#')[0],{cache:'reload'}),new Promise(r=>setTimeout(r,2500))]).catch(()=>{}).then(()=>location.reload())}
   else if(a==='pk')lockKey(t.dataset.k);
   else if(a==='pinforgot')pinForgot();
   else if(a==='pinset')openPin(t.dataset.m);
