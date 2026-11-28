@@ -421,6 +421,13 @@ body.locked{overflow:hidden}
 .lk-pad button{aspect-ratio:1.4;border-radius:18px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 22px var(--display);cursor:pointer}
 .lk-pad button:active{background:var(--accent-soft)}
 .lk-forgot{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer}
+
+.rw.sp-paid .rfg{background:linear-gradient(135deg,rgba(246,169,211,.22),rgba(199,140,243,.18))}
+.rw.sp-paid .rfg>*{filter:none;opacity:1}
+.rw.sp-paid .namebtn strong,.rw.sp-paid .rcol b{text-decoration:none}
+.rw.sp-paid .namebtn small:first-of-type{color:#bd4a8c}
+.grid td.spl::after,.grid td.paidsp::after{content:'↪';color:#c25aa0;font-size:11px;margin-left:2px}
+.grid td.paidsp{background:rgba(199,140,243,.14);text-decoration:none;opacity:1}
 </style>
 </head>
 <body>
@@ -585,10 +592,10 @@ function cycleItems(mi){
 }
 function rowHtml(x,mi){
   const st=statusOf(x.paid,x.due),id=x.c.id,sp=x.out>0;
-  const full=x.paid&&x.amt>0;
-  return '<div class="rw'+(full?' done':'')+'" data-id="'+id+'"><div class="rbg">'+ic.ok+(x.paid?'ปัดเพื่อยกเลิกการติ๊ก':'ปัดขวาเพื่อติ๊กจ่ายหมด')+'</div>'
+  const full=x.paid&&x.amt>0&&!sp,part=x.paid&&x.amt>0&&sp;
+  return '<div class="rw'+(full?' done':'')+(part?' sp-paid':'')+'" data-id="'+id+'"><div class="rbg">'+ic.ok+(x.paid?'ปัดเพื่อยกเลิกการติ๊ก':'ปัดขวาเพื่อติ๊กจ่ายหมด')+'</div>'
    +'<div class="rfg" data-id="'+id+'" data-mi="'+mi+'">'+avatar(x.c)
-   +'<button class="namebtn" data-act="detail" data-id="'+id+'" data-mi="'+mi+'"><strong>'+esc(x.c.name)+'</strong><small class="'+st.c+'">'+dm(x.due)+' · '+(x.amt>0?st.t:'ไม่มียอดจ่ายรอบนี้')+'</small>'
+   +'<button class="namebtn" data-act="detail" data-id="'+id+'" data-mi="'+mi+'"><strong>'+esc(x.c.name)+'</strong><small class="'+st.c+'">'+dm(x.due)+' · '+(x.amt>0?(part?'จ่ายส่วนนี้แล้ว · ยังเหลือยกไปเดือนหน้า':st.t):'ไม่มียอดจ่ายรอบนี้')+'</small>'
    +(sp?'<small class="splitnote">แบ่งจ่าย ยกไป ฿'+fmt(x.out)+'</small>':'')
    +'<small class="more">ดูรายการ ('+itemCount(id,mi)+') ›</small></button>'
    +'<div class="rcol"><b class="num">฿'+fmt(x.amt)+'</b><small class="num '+(x.after<0?'neg':'')+'">เหลือ '+(x.after<0?'-':'')+'฿'+fmt(Math.abs(x.after))+'</small></div>'
@@ -758,7 +765,7 @@ function viewTable(){
   for(let i=0;i<MONTHS.length;i++){
     const tot=total(i),left=salOf(i)+carryOf(i)-tot;
     rows+='<tr class="'+(i===cu?'cur ':'')+(i===cu+1?'nxt ':'')+(i<cu?'past':'')+'"><th scope="row">'+lab(i)+'</th><td>'+fmt(salOf(i))+'</td><td>'+(carryOf(i)?fmt(carryOf(i)):'')+'</td>'
-      +COLS.map(c=>{const v=cell(c.id,i),ov=isOver(c.id,i),t=!ov&&entryAmt(c.id,i)!==0,pd=!!s.paid[i+'-'+c.id];return '<td class="cellbtn'+(t?' tint':'')+(ov?' ovr':'')+(pd?' paid':'')+'"'+(i<cu?'':' data-act="cellsheet" data-id="'+c.id+'" data-mi="'+i+'" tabindex="0" role="button"')+' aria-label="'+esc(c.name)+' '+lab(i)+(pd?' จ่ายแล้ว':'')+'">'+(v||ov?fmt(v):'')+'</td>'}).join('')
+      +COLS.map(c=>{const v=cell(c.id,i),ov=isOver(c.id,i),t=!ov&&entryAmt(c.id,i)!==0,pd=!!s.paid[i+'-'+c.id],so=splitOut(c.id,i)>0;return '<td class="cellbtn'+(t?' tint':'')+(ov?' ovr':'')+(pd&&!so?' paid':'')+(so?(pd?' paidsp':' spl'):'')+'"'+(i<cu?'':' data-act="cellsheet" data-id="'+c.id+'" data-mi="'+i+'" tabindex="0" role="button"')+' aria-label="'+esc(c.name)+' '+lab(i)+(pd?(so?' จ่ายส่วนนี้แล้ว ยกยอดไปเดือนหน้า':' จ่ายแล้ว'):(so?' แบ่งจ่าย ยกยอดไปเดือนหน้า':''))+'">'+(v||ov?fmt(v):'')+'</td>'}).join('')
       +'<td>'+fmt(tot)+'</td><td class="rem '+(left<0?'neg':'')+'">'+(left<0?'-':'')+fmt(Math.abs(left))+'</td><td class="usedfor">'+usedFor(i)+'</td></tr>';
   }
   let negs=0,sum=0;
