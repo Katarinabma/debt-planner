@@ -1252,7 +1252,7 @@ function cellInner(){
   const {col,mi}=s.cellsel,c=COLS.find(x=>x.id===col);
   const pd=!!s.paid[mi+'-'+col],ov=isOver(col,mi),orig=origCell(col,mi);
   return '<h3>'+esc(c.name)+' · '+labFull(mi)+'</h3>'
-   +'<button class="btn'+(pd?' ghost':'')+'" data-act="cellpay">'+(pd?'ยกเลิกการติ๊ก (ยังไม่จ่าย)':'ติ๊กว่าจ่ายแล้ว')+'</button>'
+   +'<button class="btn'+(pd?' ghost':'')+'" data-act="cellpay">'+(pd?'ยกเลิกการติ๊ก (ยังไม่จ่าย)':(splitOut(col,mi)>0?'ติ๊กว่าจ่ายส่วนนี้แล้ว':'ติ๊กว่าจ่ายแล้ว'))+'</button>'
    +'<div class="field"><label for="c-amt">ยอดช่องนี้ (บาท)</label><input id="c-amt" class="num" inputmode=\"decimal\" value="'+(cell(col,mi)||'')+'" placeholder="0"></div>'
    +'<p class="note" style="margin:0" id="c-note">'+(ov?'แก้ยอดเองอยู่ · ยอดตามรายการเดิม ฿'+fmt(orig):'ยอดตามรายการ ฿'+fmt(orig)+' · พิมพ์ยอดใหม่เพื่อแก้เฉพาะช่องนี้')+'</p>'
    +'<div class="cc-act" style="margin:0">'+(ov?'<button class="btn ghost sm" data-act="cellreset">คืนยอดเดิม</button>':'')+'<button class="btn ghost sm" data-act="celldetail">ดูรายการข้างใน</button>'+(origCell(col,mi)>0&&!pd?'<button class="btn sm" data-act="cellspl">จ่ายไม่หมด · ยกยอดพร้อมดอก</button>':'')+'</div>'
